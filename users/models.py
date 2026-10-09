@@ -8,12 +8,19 @@ class UserManager(BaseUserManager):
 
     use_in_migrations = True
 
+    @classmethod
+    def normalize_email(cls, email):
+        return super().normalize_email(email.strip() if email else email).lower()
+
+    def get_by_natural_key(self, email):
+        return self.get(email__iexact=self.normalize_email(email))
+
     def _create_user(self, email, password, **extra_fields):
         """Create and save a User with the given email and password."""
         if not email:
             raise ValueError("The given email must be set")
 
-        email = self.normalize_email(email).lower()
+        email = self.normalize_email(email)
         user = self.model(email=email, **extra_fields)
         user.set_password(password)
         with transaction.atomic(using=self._db):
@@ -53,3 +60,11 @@ class User(AbstractUser):
     REQUIRED_FIELDS = []
 
     objects = UserManager()
+
+    def clean(self):
+        super().clean()
+        self.email = type(self).objects.normalize_email(self.email)
+
+    def save(self, *args, **kwargs):
+        self.email = type(self).objects.normalize_email(self.email)
+        super().save(*args, **kwargs)

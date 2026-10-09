@@ -6,6 +6,18 @@ from users.roles import CUSTOMER, ROLE_CHOICES, get_role
 
 
 class RoleFormMixin:
+    def clean_email(self):
+        email = User.objects.normalize_email(self.cleaned_data["email"])
+        users = User.objects.filter(email__iexact=email)
+
+        if self.instance.pk:
+            users = users.exclude(pk=self.instance.pk)
+
+        if users.exists():
+            raise forms.ValidationError("A user with this email already exists")
+
+        return email
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["role"].initial = get_role(self.instance) if (

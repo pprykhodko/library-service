@@ -1,5 +1,8 @@
 from django.contrib.auth import get_user_model, password_validation
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
+
+from users.roles import ROLE_CHOICES
 
 from users.roles import get_role
 
@@ -22,15 +25,21 @@ class UserSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             "password": {
                 "write_only": True,
-                "min_length": 8
+                "min_length": 8,
+                "trim_whitespace": False
             }
         }
 
+    @extend_schema_field(
+        serializers.ChoiceField(
+            choices=ROLE_CHOICES,
+            allow_null=True)
+    )
     def get_role(self, obj):
         return get_role(obj)
 
     def validate_email(self, value):
-        value = value.lower()
+        value = get_user_model().objects.normalize_email(value)
         users = get_user_model().objects.filter(email__iexact=value)
 
         if self.instance:
@@ -68,6 +77,21 @@ class UserSerializer(serializers.ModelSerializer):
         return instance
 
 
+class ProfileSerializer(UserSerializer):
+    class Meta(UserSerializer.Meta):
+        fields = tuple(
+            field for field in UserSerializer.Meta.fields if field != "password"
+        )
+
+    def validate(self, attrs):
+        if "password" in self.initial_data:
+            raise serializers.ValidationError({
+                "password": "Use /users/me/password/ with your current password."
+            })
+
+        return super().validate(attrs)
+
+
 class CustomerSerializer(serializers.ModelSerializer):
     class Meta:
         model = get_user_model()
@@ -76,7 +100,7 @@ class CustomerSerializer(serializers.ModelSerializer):
 
 
 class ChangePasswordSerializer(serializers.Serializer):
-    old_password = serializers.CharField(write_only=True)
+    old_password = serializers.CharField(write_only=True, trim_whitespace=False)
     new_password = serializers.CharField(write_only=True, trim_whitespace=False)
 
     def validate_old_password(self, value):
