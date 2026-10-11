@@ -26,3 +26,26 @@ class BookSerializer(serializers.ModelSerializer):
                 "allow_blank": False
             }
         }
+
+
+class BookFilterSerializer(serializers.Serializer):
+    title = serializers.CharField(
+        required=False,
+        help_text="Case-insensitive partial title match"
+    )
+    author = serializers.CharField(
+        required=False,
+        help_text="Case-insensitive partial author match"
+    )
+    cover = serializers.ChoiceField(
+        choices=Book.Cover.choices,
+        required=False
+    )
+    is_active = serializers.BooleanField(
+        required=False,
+        help_text="Filter catalog status. Customers can only see active books."
+    )
+    available = serializers.BooleanField(
+        required=False,
+        help_text="Available means active with inventory greater than zero."
+    )
