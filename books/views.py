@@ -78,7 +78,7 @@ class BookViewSet(ProtectBookDeletionMixin, viewsets.ModelViewSet):
         if self.action != "list":
             return queryset
 
-        filters = BookFilterSerializer(data=self.request.query_params)
+        filters = BookFilterSerializer(data=self.request.query_params.dict())
         filters.is_valid(raise_exception=True)
         params = filters.validated_data
 
