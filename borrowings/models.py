@@ -1,4 +1,7 @@
+from decimal import Decimal
+
 from django.conf import settings
+from django.core.validators import MinValueValidator
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
@@ -8,6 +11,10 @@ class Borrowing(models.Model):
     borrow_date = models.DateField(default=timezone.localdate, editable=False)
     expected_return_date = models.DateField()
     actual_return_date = models.DateField(null=True, blank=True, default=None)
+    daily_fee = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True, editable=False,
+        validators=[MinValueValidator(Decimal("0"))]
+    )
     book = models.ForeignKey(
         "books.Book",
         on_delete=models.PROTECT,
@@ -22,6 +29,10 @@ class Borrowing(models.Model):
     class Meta:
         ordering = ("-borrow_date", "-id")
         constraints = [
+            models.CheckConstraint(
+                condition=models.Q(daily_fee__isnull=True) | models.Q(daily_fee__gte=0),
+                name="borrowing_daily_fee_nonnegative"
+            ),
             models.CheckConstraint(
                 condition=models.Q(expected_return_date__gte=models.F("borrow_date")),
                 name="borrowing_expected_not_before_borrow"
