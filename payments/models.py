@@ -9,6 +9,7 @@ class Payment(models.Model):
     class Status(models.TextChoices):
         PENDING = "PENDING", "Pending"
         PAID = "PAID", "Paid"
+        EXPIRED = "EXPIRED", "Expired"
 
     class Type(models.TextChoices):
         PAYMENT = "PAYMENT", "Payment"
@@ -36,7 +37,7 @@ class Payment(models.Model):
                 name="payment_amount_nonnegative",
             ),
             models.CheckConstraint(
-                condition=models.Q(status__in=["PENDING", "PAID"]),
+                condition=models.Q(status__in=["PENDING", "PAID", "EXPIRED"]),
                 name="payment_status_valid",
             ),
             models.CheckConstraint(
@@ -47,7 +48,20 @@ class Payment(models.Model):
                 fields=["borrowing"], condition=models.Q(type="PAYMENT"),
                 name="one_rental_payment_per_borrowing",
             ),
+            models.UniqueConstraint(
+                fields=["borrowing"], condition=models.Q(type="FINE"),
+                name="one_fine_per_borrowing",
+            ),
         ]
 
     def __str__(self):
         return f"Payment {self.pk}: {self.money_to_pay} USD ({self.status})"
+
+
+class ExpiredCheckoutSession(models.Model):
+    payment = models.ForeignKey(
+        Payment, on_delete=models.PROTECT,
+        related_name="expired_sessions"
+    )
+    session_id = models.CharField(max_length=255, unique=True)
+    checkout_key = models.UUIDField(unique=True)

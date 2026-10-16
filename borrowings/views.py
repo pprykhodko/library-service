@@ -18,6 +18,7 @@ from borrowings.serializers import (
     BorrowingSerializer,
 )
 from users.roles import ADMIN, EMPLOYEE, get_role
+from payments.services import create_return_fine, lock_borrower
 
 
 @extend_schema(tags=["borrowings"])
@@ -33,6 +34,7 @@ from users.roles import ADMIN, EMPLOYEE, get_role
         description=(
                 "Customers and administrators may borrow for themselves. "
                 "The server assigns the user and borrowing date and reduces inventory."
+                " Outstanding payments or fines prevent new borrowings."
         )
     )
 )
@@ -96,6 +98,8 @@ class BorrowingViewSet(
         description=(
                 "Employees and administrators only. Sets today's return date and "
                 "restores one copy. Repeated returns are rejected. No body is required."
+                " An overdue return creates one fine: overdue days times the saved "
+                "daily fee times 2, with a minimum nonzero fine of 0.50 USD."
         ),
         request=BorrowingReturnSerializer,
         responses={200: BorrowingDetailSerializer}
@@ -106,6 +110,8 @@ class BorrowingViewSet(
         today = timezone.localdate()
 
         with transaction.atomic():
+            lock_borrower(borrowing.user_id)
+            borrowing.refresh_from_db()
             updated = Borrowing.objects.filter(
                 pk=borrowing.pk, actual_return_date__isnull=True,
                 borrow_date__lte=today
@@ -118,6 +124,7 @@ class BorrowingViewSet(
                             "This borrowing is already returned or starts in the future"
                     }
                 )
+            create_return_fine(borrowing, today)
             Book.objects.filter(pk=borrowing.book_id).update(
                 inventory=F("inventory") + 1
             )

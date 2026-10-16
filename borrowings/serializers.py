@@ -8,7 +8,8 @@ from books.serializers import BookSerializer
 from borrowings.models import Borrowing
 from users.serializers import CustomerSerializer
 from payments.serializers import PaymentSerializer
-from payments.services import create_rental_payment
+from payments.models import Payment
+from payments.services import create_rental_payment, lock_borrower
 
 
 class BorrowingSerializer(serializers.ModelSerializer):
@@ -54,8 +55,21 @@ class BorrowingSerializer(serializers.ModelSerializer):
             })
 
         with transaction.atomic():
+            lock_borrower(validated_data["user"].pk)
+
+            if Payment.objects.filter(
+                borrowing__user=validated_data["user"],
+                status__in=[Payment.Status.PENDING, Payment.Status.EXPIRED]
+            ).exists():
+                raise serializers.ValidationError({
+                    "detail": "Pay all outstanding rental payments and fines "
+                              "before borrowing another book."
+                })
+
             updated = Book.objects.filter(
-                pk=validated_data["book"].pk, is_active=True, inventory__gt=0,
+                pk=validated_data["book"].pk,
+                is_active=True,
+                inventory__gt=0
             ).update(inventory=F("inventory") - 1)
 
             if not updated:

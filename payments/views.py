@@ -9,10 +9,16 @@ from rest_framework.views import APIView
 from borrowings.pagination import BorrowingPagination
 from payments.models import Payment
 from payments.serializers import (
-    PaymentResultSerializer, PaymentSerializer, SessionQuerySerializer,
+    PaymentResultSerializer,
+    PaymentSerializer,
+    SessionQuerySerializer
 )
 from payments.services import (
-    PaymentProviderUnavailable, checkout, confirm_session, retrieve_session,
+    PaymentProviderUnavailable,
+    checkout,
+    confirm_session,
+    renew_checkout,
+    retrieve_session
 )
 from users.roles import ADMIN, CUSTOMER, EMPLOYEE, get_role
 
@@ -51,7 +57,7 @@ class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
         description="Owner or administrator: create or reuse a Stripe checkout link."
     )
     @action(detail=True, methods=["post"])
-    def checkout(self, request, pk=None):
+    def checkout(self, request):
         payment = self.get_object()
 
         if not request.user.is_superuser and (
@@ -61,6 +67,24 @@ class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
             self.permission_denied(request)
 
         return Response(self.get_serializer(checkout(payment)).data)
+
+    @extend_schema(
+        request=None,
+        responses=PaymentSerializer,
+        description="Owner or administrator: replace an expired Stripe session. "
+                    "The payment amount and book inventory remain unchanged."
+    )
+    @action(detail=True, methods=["post"])
+    def renew(self, request):
+        payment = self.get_object()
+
+        if not request.user.is_superuser and (
+            get_role(request.user) != CUSTOMER
+            or payment.borrowing.user_id != request.user.pk
+        ):
+            self.permission_denied(request)
+
+        return Response(self.get_serializer(renew_checkout(payment)).data)
 
 
 @extend_schema(tags=["payments"])
@@ -122,10 +146,14 @@ class StripeWebhookView(APIView):
             raise serializers.ValidationError(
                 "Invalid webhook signature or payload"
             )
+
         if event["type"] in (
-            "checkout.session.completed", "checkout.session.async_payment_succeeded"
+            "checkout.session.completed",
+            "checkout.session.async_payment_succeeded",
+            "checkout.session.expired"
         ):
             session = event["data"]["object"]
+
             if session.get("metadata", {}).get("payment_id"):
                 confirm_session(session)
 
