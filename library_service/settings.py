@@ -170,3 +170,15 @@ SPECTACULAR_SETTINGS = {
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 PAYMENTS_BASE_URL = os.getenv("PAYMENTS_BASE_URL", "http://127.0.0.1:8000")
+
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://127.0.0.1:6379/0")
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_TASK_IGNORE_RESULT = True
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_BEAT_SCHEDULE = {
+    "sync-payment-sessions-every-minute": {
+        "task": "payments.tasks.sync_payment_sessions",
+        "schedule": timedelta(minutes=1),
+        "options": {"expires": 60},
+    },
+}
