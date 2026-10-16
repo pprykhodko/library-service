@@ -13,5 +13,6 @@ class APIRootView(APIView):
         return Response({
             "users": reverse("users:register", request=request),
             "books": reverse("books:books-list", request=request),
-            "borrowings": reverse("borrowings:borrowings-list", request=request)
+            "borrowings": reverse("borrowings:borrowings-list", request=request),
+            "payments": reverse("payments:payments-list", request=request),
         })
