@@ -57,7 +57,7 @@ class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
         description="Owner or administrator: create or reuse a Stripe checkout link."
     )
     @action(detail=True, methods=["post"])
-    def checkout(self, request):
+    def checkout(self, request, pk=None):
         payment = self.get_object()
 
         if not request.user.is_superuser and (
@@ -75,7 +75,7 @@ class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
                     "The payment amount and book inventory remain unchanged."
     )
     @action(detail=True, methods=["post"])
-    def renew(self, request):
+    def renew(self, request, pk=None):
         payment = self.get_object()
 
         if not request.user.is_superuser and (
