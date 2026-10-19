@@ -10,11 +10,15 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
+import os
+
+from dotenv import load_dotenv
 from pathlib import Path
 from datetime import timedelta
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env")
 
 
 # Quick-start development settings - unsuitable for production
@@ -43,6 +47,7 @@ INSTALLED_APPS = [
     'users',
     'books',
     'borrowings',
+    'payments',
 ]
 
 MIDDLEWARE = [
@@ -159,4 +164,21 @@ SPECTACULAR_SETTINGS = {
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "COMPONENT_SPLIT_REQUEST": True,
+}
+
+
+STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+PAYMENTS_BASE_URL = os.getenv("PAYMENTS_BASE_URL", "http://127.0.0.1:8000")
+
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://127.0.0.1:6379/0")
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_TASK_IGNORE_RESULT = True
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_BEAT_SCHEDULE = {
+    "sync-payment-sessions-every-minute": {
+        "task": "payments.tasks.sync_payment_sessions",
+        "schedule": timedelta(minutes=1),
+        "options": {"expires": 60},
+    },
 }
