@@ -1,3 +1,16 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "library-service"
+version = "0.1.0"
+requires-python = ">=3.14"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["books*", "borrowings*", "users*", "payments*", "library_service*"]
+
 [tool.black]
 line-length = 88
 target-version = ["py314"]
@@ -9,8 +22,8 @@ source = ["users", "books", "borrowings", "payments", "library_service"]
 omit = [
     "*/migrations/*",
     "*/tests.py",
-    "library_service/asgi.py",
-    "library_service/wsgi.py",
+    "src/library_service/asgi.py",
+    "src/library_service/wsgi.py",
 ]
 
 [tool.coverage.report]
