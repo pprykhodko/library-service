@@ -8,7 +8,7 @@ class CanManageBooks(BasePermission):
         if not request.user.is_authenticated:
             return False
 
-        return (
-            request.method in SAFE_METHODS
-            or get_role(request.user) in (EMPLOYEE, ADMIN)
+        return request.method in SAFE_METHODS or get_role(request.user) in (
+            EMPLOYEE,
+            ADMIN,
         )

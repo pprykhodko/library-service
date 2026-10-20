@@ -20,15 +20,19 @@ class BorrowingModelTests(TestCase):
     @classmethod
     def setUpTestData(cls) -> None:
         cls.book = Book.objects.create(
-            title="The Hobbit", author="J. R. R. Tolkien",
-            inventory=3, daily_fee=Decimal("1.50"),
+            title="The Hobbit",
+            author="J. R. R. Tolkien",
+            inventory=3,
+            daily_fee=Decimal("1.50"),
         )
         cls.user = User.objects.create_user("reader@example.com")
 
     def setUp(self) -> None:
         self.borrow_date = date(2026, 10, 19)
         self.borrowing = Borrowing(
-            book=self.book, user=self.user, borrow_date=self.borrow_date,
+            book=self.book,
+            user=self.user,
+            borrow_date=self.borrow_date,
             expected_return_date=self.borrow_date + timedelta(days=3),
             daily_fee=Decimal("1.50"),
         )
@@ -41,15 +45,18 @@ class BorrowingModelTests(TestCase):
         self.assertEqual(self.borrowing.book_id, self.book.pk)
         self.assertEqual(self.borrowing.user_id, self.user.pk)
         self.assertEqual(self.borrowing.borrow_date, self.borrow_date)
-        self.assertEqual(self.borrowing.expected_return_date,
-                         self.borrow_date + timedelta(days=3))
+        self.assertEqual(
+            self.borrowing.expected_return_date, self.borrow_date + timedelta(days=3)
+        )
         self.assertIsNone(self.borrowing.actual_return_date)
         self.assertEqual(self.borrowing.daily_fee, Decimal("1.50"))
 
     def test_default_borrow_date_is_current_local_date(self):
         before = timezone.localdate()
         borrowing = Borrowing(
-            book=self.book, user=self.user, expected_return_date=before,
+            book=self.book,
+            user=self.user,
+            expected_return_date=before,
         )
         after = timezone.localdate()
         self.assertIn(borrowing.borrow_date, (before, after))
@@ -91,9 +98,13 @@ class BorrowingModelTests(TestCase):
         self.borrowing.actual_return_date = yesterday
         with self.assertRaises(ValidationError) as error:
             self.borrowing.clean()
-        self.assertSetEqual(set(error.exception.message_dict), {
-            "expected_return_date", "actual_return_date",
-        })
+        self.assertSetEqual(
+            set(error.exception.message_dict),
+            {
+                "expected_return_date",
+                "actual_return_date",
+            },
+        )
 
     def test_legacy_null_fee_and_zero_fee_are_allowed(self):
         for fee in (None, Decimal("0.00")):
@@ -123,8 +134,10 @@ class BorrowingModelTests(TestCase):
                 with self.assertRaises(IntegrityError), transaction.atomic():
                     Borrowing.objects.filter(pk=self.borrowing.pk).update(**changes)
                 self.borrowing.refresh_from_db()
-                self.assertEqual(self.borrowing.expected_return_date,
-                                 self.borrow_date + timedelta(days=3))
+                self.assertEqual(
+                    self.borrowing.expected_return_date,
+                    self.borrow_date + timedelta(days=3),
+                )
                 self.assertIsNone(self.borrowing.actual_return_date)
                 self.assertEqual(self.borrowing.daily_fee, Decimal("1.50"))
 
@@ -143,7 +156,8 @@ class BorrowingModelTests(TestCase):
             self.borrowing.save(update_fields=["actual_return_date"])
             for related in (self.book, self.user):
                 with self.subTest(
-                    return_date=return_date, model=type(related).__name__,
+                    return_date=return_date,
+                    model=type(related).__name__,
                 ):
                     with self.assertRaises(ProtectedError):
                         related.delete()
@@ -156,17 +170,22 @@ class BorrowingModelTests(TestCase):
     def test_default_ordering_uses_date_then_descending_id(self):
         self.borrowing.save()
         older = Borrowing.objects.create(
-            book=self.book, user=self.user,
+            book=self.book,
+            user=self.user,
             borrow_date=self.borrow_date - timedelta(days=1),
             expected_return_date=self.borrow_date,
         )
         same_day = Borrowing.objects.create(
-            book=self.book, user=self.user, borrow_date=self.borrow_date,
+            book=self.book,
+            user=self.user,
+            borrow_date=self.borrow_date,
             expected_return_date=self.borrow_date,
         )
 
-        self.assertEqual(list(Borrowing.objects.values_list("pk", flat=True)),
-                         [same_day.pk, self.borrowing.pk, older.pk])
+        self.assertEqual(
+            list(Borrowing.objects.values_list("pk", flat=True)),
+            [same_day.pk, self.borrowing.pk, older.pk],
+        )
 
     def test_string_representation_identifies_borrowing_book_and_user(self):
         self.borrowing.save()

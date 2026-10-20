@@ -7,12 +7,9 @@ ADMIN = "admin"
 ROLE_CHOICES = (
     (CUSTOMER, "Customer"),
     (EMPLOYEE, "Employee"),
-    (ADMIN, "Administrator")
+    (ADMIN, "Administrator"),
 )
-ROLE_GROUPS = {
-    CUSTOMER: "Customers",
-    EMPLOYEE: "Employees"
-}
+ROLE_GROUPS = {CUSTOMER: "Customers", EMPLOYEE: "Employees"}
 
 
 def get_role(user):

@@ -14,7 +14,7 @@ class PaymentAdmin(admin.ModelAdmin):
         "money_to_pay",
         "session_id",
         "session_url",
-        "checkout_key"
+        "checkout_key",
     )
 
     def has_add_permission(self, request):

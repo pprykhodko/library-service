@@ -10,7 +10,6 @@ from borrowings.models import Borrowing
 from users.models import User
 from users.roles import EMPLOYEE, assign_role
 
-
 BOOKS_URL = reverse("books:books-list")
 
 
@@ -36,38 +35,63 @@ class BookApiTests(APITestCase):
         assign_role(cls.employee, EMPLOYEE)
         cls.admin = User.objects.create_superuser("admin@example.com", "Password!2026")
         cls.available = Book.objects.create(
-            title="Alpha Hobbit", author="J. R. R. Tolkien", cover="HARD",
-            inventory=3, daily_fee=Decimal("1.50"),
+            title="Alpha Hobbit",
+            author="J. R. R. Tolkien",
+            cover="HARD",
+            inventory=3,
+            daily_fee=Decimal("1.50"),
         )
         cls.sold_out = Book.objects.create(
-            title="Beta Hobbit", author="Another Author", cover="SOFT",
-            inventory=0, daily_fee=Decimal("2.00"),
+            title="Beta Hobbit",
+            author="Another Author",
+            cover="SOFT",
+            inventory=0,
+            daily_fee=Decimal("2.00"),
         )
         cls.inactive = Book.objects.create(
-            title="Gamma Archive", author="J. R. R. Tolkien", cover="HARD",
-            inventory=2, daily_fee=Decimal("1.00"), is_active=False,
+            title="Gamma Archive",
+            author="J. R. R. Tolkien",
+            cover="HARD",
+            inventory=2,
+            daily_fee=Decimal("1.00"),
+            is_active=False,
         )
         cls.inactive_empty = Book.objects.create(
-            title="Omega Archive", author="Another Author", cover="SOFT",
-            inventory=0, daily_fee=Decimal("0.00"), is_active=False,
+            title="Omega Archive",
+            author="Another Author",
+            cover="SOFT",
+            inventory=0,
+            daily_fee=Decimal("0.00"),
+            is_active=False,
         )
 
     def setUp(self) -> None:
         self.payload: dict[str, object] = {
-            "title": "New Book", "author": "New Author", "cover": "SOFT",
-            "inventory": 5, "daily_fee": "2.50", "is_active": True,
+            "title": "New Book",
+            "author": "New Author",
+            "cover": "SOFT",
+            "inventory": 5,
+            "daily_fee": "2.50",
+            "is_active": True,
         }
 
     def test_anonymous_cannot_read_or_write_catalog(self):
         self.assertEqual(self.client.get(BOOKS_URL).status_code, 401)
         self.assertEqual(self.client.get(detail_url(self.available)).status_code, 401)
-        self.assertEqual(self.client.post(
-            BOOKS_URL, self.payload, format="json",
-        ).status_code, 401)
+        self.assertEqual(
+            self.client.post(
+                BOOKS_URL,
+                self.payload,
+                format="json",
+            ).status_code,
+            401,
+        )
         for method in (self.client.put, self.client.patch, self.client.delete):
             with self.subTest(method=method.__name__):
                 response = method(
-                    detail_url(self.available), self.payload, format="json",
+                    detail_url(self.available),
+                    self.payload,
+                    format="json",
                 )
                 self.assertEqual(response.status_code, 401)
         self.assertEqual(Book.objects.count(), 4)
@@ -80,8 +104,10 @@ class BookApiTests(APITestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["count"], 2)
-        self.assertEqual([book["id"] for book in response.data["results"]],
-                         [self.available.pk, self.sold_out.pk])
+        self.assertEqual(
+            [book["id"] for book in response.data["results"]],
+            [self.available.pk, self.sold_out.pk],
+        )
 
     def test_employee_and_admin_list_includes_inactive_books(self):
         for user in (self.employee, self.admin):
@@ -90,10 +116,15 @@ class BookApiTests(APITestCase):
                 response = self.client.get(BOOKS_URL)
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(response.data["count"], 4)
-                self.assertEqual([book["id"] for book in response.data["results"]], [
-                    self.available.pk, self.sold_out.pk,
-                    self.inactive.pk, self.inactive_empty.pk,
-                ])
+                self.assertEqual(
+                    [book["id"] for book in response.data["results"]],
+                    [
+                        self.available.pk,
+                        self.sold_out.pk,
+                        self.inactive.pk,
+                        self.inactive_empty.pk,
+                    ],
+                )
 
     def test_all_roles_can_retrieve_active_book(self):
         for user in (self.customer, self.employee, self.admin):
@@ -106,7 +137,9 @@ class BookApiTests(APITestCase):
 
     def test_only_employee_and_admin_can_retrieve_inactive_book(self):
         cases: tuple[tuple[User, int], ...] = (
-            (self.customer, 404), (self.employee, 200), (self.admin, 200),
+            (self.customer, 404),
+            (self.employee, 200),
+            (self.admin, 200),
         )
         for user, expected in cases:
             with self.subTest(user=user.email):
@@ -121,7 +154,9 @@ class BookApiTests(APITestCase):
         for method in (self.client.put, self.client.patch, self.client.delete):
             with self.subTest(method=method.__name__):
                 response = method(
-                    detail_url(self.available), self.payload, format="json",
+                    detail_url(self.available),
+                    self.payload,
+                    format="json",
                 )
                 self.assertEqual(response.status_code, 403)
         self.assertEqual(Book.objects.count(), 4)
@@ -146,11 +181,18 @@ class BookApiTests(APITestCase):
             with self.subTest(user=user.email):
                 book = Book.objects.create(**self.payload)
                 self.client.force_authenticate(user)
-                response = self.client.put(detail_url(book), {
-                    "title": "Replacement", "author": "Changed Author",
-                    "cover": "HARD", "inventory": 0, "daily_fee": "0.00",
-                    "is_active": False,
-                }, format="json")
+                response = self.client.put(
+                    detail_url(book),
+                    {
+                        "title": "Replacement",
+                        "author": "Changed Author",
+                        "cover": "HARD",
+                        "inventory": 0,
+                        "daily_fee": "0.00",
+                        "is_active": False,
+                    },
+                    format="json",
+                )
                 self.assertEqual(response.status_code, 200, response.data)
                 book.refresh_from_db()
                 self.assertEqual(book.title, "Replacement")
@@ -165,9 +207,13 @@ class BookApiTests(APITestCase):
             with self.subTest(user=user.email):
                 book = Book.objects.create(**self.payload)
                 self.client.force_authenticate(user)
-                response = self.client.patch(detail_url(book), {
-                    "inventory": 0,
-                }, format="json")
+                response = self.client.patch(
+                    detail_url(book),
+                    {
+                        "inventory": 0,
+                    },
+                    format="json",
+                )
                 self.assertEqual(response.status_code, 200)
                 book.refresh_from_db()
                 self.assertEqual(book.inventory, 0)
@@ -181,9 +227,14 @@ class BookApiTests(APITestCase):
         response = self.client.post(BOOKS_URL, payload, format="json")
         self.assertEqual(response.status_code, 400)
         self.assertIn("inventory", response.data)
-        response = self.client.patch(detail_url(self.available), {
-            "title": "Should not be saved", "daily_fee": "-1.00",
-        }, format="json")
+        response = self.client.patch(
+            detail_url(self.available),
+            {
+                "title": "Should not be saved",
+                "daily_fee": "-1.00",
+            },
+            format="json",
+        )
         self.assertEqual(response.status_code, 400)
         self.assertIn("daily_fee", response.data)
         self.available.refresh_from_db()
@@ -207,8 +258,11 @@ class BookApiTests(APITestCase):
                 with self.subTest(user=user.email, returned=returned):
                     book = Book.objects.create(**self.payload)
                     borrowing = Borrowing.objects.create(
-                        book=book, user=self.customer, borrow_date=today,
-                        expected_return_date=today, daily_fee=book.daily_fee,
+                        book=book,
+                        user=self.customer,
+                        borrow_date=today,
+                        expected_return_date=today,
+                        daily_fee=book.daily_fee,
                         actual_return_date=today if returned else None,
                     )
                     self.client.force_authenticate(user)
@@ -223,13 +277,19 @@ class BookApiTests(APITestCase):
     def test_book_with_borrowing_can_be_withdrawn_from_catalog(self):
         today = timezone.localdate()
         borrowing = Borrowing.objects.create(
-            book=self.available, user=self.customer,
-            expected_return_date=today, daily_fee=self.available.daily_fee,
+            book=self.available,
+            user=self.customer,
+            expected_return_date=today,
+            daily_fee=self.available.daily_fee,
         )
         self.client.force_authenticate(self.employee)
-        response = self.client.patch(detail_url(self.available), {
-            "is_active": False,
-        }, format="json")
+        response = self.client.patch(
+            detail_url(self.available),
+            {
+                "is_active": False,
+            },
+            format="json",
+        )
         self.assertEqual(response.status_code, 200)
         self.available.refresh_from_db()
         self.assertFalse(self.available.is_active)
@@ -249,15 +309,18 @@ class BookApiTests(APITestCase):
                 response = self.client.get(BOOKS_URL, params)
                 self.assertEqual(response.status_code, 200)
                 self.assertSetEqual(
-                    {book["id"] for book in response.data["results"]}, expected_ids,
+                    {book["id"] for book in response.data["results"]},
+                    expected_ids,
                 )
 
     def test_cover_filter(self):
         self.client.force_authenticate(self.employee)
         response = self.client.get(BOOKS_URL, {"cover": "SOFT"})
         self.assertEqual(response.status_code, 200)
-        self.assertSetEqual({book["id"] for book in response.data["results"]},
-                            {self.sold_out.pk, self.inactive_empty.pk})
+        self.assertSetEqual(
+            {book["id"] for book in response.data["results"]},
+            {self.sold_out.pk, self.inactive_empty.pk},
+        )
 
     def test_is_active_filter_handles_both_boolean_values(self):
         self.client.force_authenticate(self.employee)
@@ -269,7 +332,8 @@ class BookApiTests(APITestCase):
                 response = self.client.get(BOOKS_URL, {"is_active": value})
                 self.assertEqual(response.status_code, 200)
                 self.assertSetEqual(
-                    {book["id"] for book in response.data["results"]}, expected_ids,
+                    {book["id"] for book in response.data["results"]},
+                    expected_ids,
                 )
 
     def test_available_filter_accounts_for_inventory_and_catalog_status(self):
@@ -282,7 +346,8 @@ class BookApiTests(APITestCase):
                 response = self.client.get(BOOKS_URL, {"available": value})
                 self.assertEqual(response.status_code, 200)
                 self.assertSetEqual(
-                    {book["id"] for book in response.data["results"]}, expected_ids,
+                    {book["id"] for book in response.data["results"]},
+                    expected_ids,
                 )
 
     def test_customer_filters_cannot_expose_inactive_books(self):
@@ -296,24 +361,35 @@ class BookApiTests(APITestCase):
                 response = self.client.get(BOOKS_URL, params)
                 self.assertEqual(response.status_code, 200)
                 self.assertSetEqual(
-                    {book["id"] for book in response.data["results"]}, expected_ids,
+                    {book["id"] for book in response.data["results"]},
+                    expected_ids,
                 )
 
     def test_combined_filters_intersect(self):
         self.client.force_authenticate(self.employee)
-        response = self.client.get(BOOKS_URL, {
-            "title": "Hobbit", "author": "Another", "cover": "SOFT",
-            "is_active": "true", "available": "false",
-        })
+        response = self.client.get(
+            BOOKS_URL,
+            {
+                "title": "Hobbit",
+                "author": "Another",
+                "cover": "SOFT",
+                "is_active": "true",
+                "available": "false",
+            },
+        )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual([book["id"] for book in response.data["results"]],
-                         [self.sold_out.pk])
+        self.assertEqual(
+            [book["id"] for book in response.data["results"]], [self.sold_out.pk]
+        )
 
     def test_invalid_filters_return_field_errors(self):
         self.client.force_authenticate(self.employee)
         for field, value in (
-            ("available", "maybe"), ("is_active", "maybe"),
-            ("cover", "NONE"), ("title", " "), ("author", " "),
+            ("available", "maybe"),
+            ("is_active", "maybe"),
+            ("cover", "NONE"),
+            ("title", " "),
+            ("author", " "),
         ):
             with self.subTest(field=field):
                 response = self.client.get(BOOKS_URL, {field: value})
@@ -339,17 +415,28 @@ class BookApiTests(APITestCase):
         self.assertIsNone(second.data["next"])
         self.assertIsNotNone(second.data["previous"])
         ids = [book["id"] for book in first.data["results"] + second.data["results"]]
-        self.assertEqual(ids, [
-            self.available.pk, self.sold_out.pk,
-            self.inactive.pk, self.inactive_empty.pk,
-        ])
+        self.assertEqual(
+            ids,
+            [
+                self.available.pk,
+                self.sold_out.pk,
+                self.inactive.pk,
+                self.inactive_empty.pk,
+            ],
+        )
 
     def test_default_and_maximum_page_sizes(self):
-        Book.objects.bulk_create([
-            Book(title=f"Extra {index:03}", author="Author", inventory=1,
-                 daily_fee=Decimal("1.00"))
-            for index in range(101)
-        ])
+        Book.objects.bulk_create(
+            [
+                Book(
+                    title=f"Extra {index:03}",
+                    author="Author",
+                    inventory=1,
+                    daily_fee=Decimal("1.00"),
+                )
+                for index in range(101)
+            ]
+        )
         self.client.force_authenticate(self.employee)
         response = self.client.get(BOOKS_URL)
         self.assertEqual(response.status_code, 200)

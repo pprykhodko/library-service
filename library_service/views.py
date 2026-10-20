@@ -10,9 +10,11 @@ class APIRootView(APIView):
     permission_classes = (AllowAny,)
 
     def get(self, request):
-        return Response({
-            "users": reverse("users:register", request=request),
-            "books": reverse("books:books-list", request=request),
-            "borrowings": reverse("borrowings:borrowings-list", request=request),
-            "payments": reverse("payments:payments-list", request=request),
-        })
+        return Response(
+            {
+                "users": reverse("users:register", request=request),
+                "books": reverse("books:books-list", request=request),
+                "borrowings": reverse("borrowings:borrowings-list", request=request),
+                "payments": reverse("payments:payments-list", request=request),
+            }
+        )

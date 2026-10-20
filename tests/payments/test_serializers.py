@@ -21,30 +21,38 @@ class PaymentSerializerTests(TestCase):
     @classmethod
     def setUpTestData(cls) -> None:
         book = Book.objects.create(
-            title="The Hobbit", author="J. R. R. Tolkien",
-            inventory=3, daily_fee=Decimal("1.50"),
+            title="The Hobbit",
+            author="J. R. R. Tolkien",
+            inventory=3,
+            daily_fee=Decimal("1.50"),
         )
         user = User.objects.create_user("reader@example.com")
         borrowing = Borrowing.objects.create(
-            book=book, user=user, expected_return_date=timezone.localdate(),
+            book=book,
+            user=user,
+            expected_return_date=timezone.localdate(),
             daily_fee=book.daily_fee,
         )
         cls.payment = Payment.objects.create(
-            borrowing=borrowing, money_to_pay=Decimal("4.50"),
+            borrowing=borrowing,
+            money_to_pay=Decimal("4.50"),
         )
 
     def test_representation_contains_public_fields_and_formatted_amount(self):
         data = PaymentSerializer(self.payment).data
 
-        self.assertEqual(data, {
-            "id": self.payment.pk,
-            "borrowing": self.payment.borrowing_id,
-            "status": "PENDING",
-            "type": "PAYMENT",
-            "session_url": "",
-            "session_id": None,
-            "money_to_pay": "4.50",
-        })
+        self.assertEqual(
+            data,
+            {
+                "id": self.payment.pk,
+                "borrowing": self.payment.borrowing_id,
+                "status": "PENDING",
+                "type": "PAYMENT",
+                "session_url": "",
+                "session_id": None,
+                "money_to_pay": "4.50",
+            },
+        )
         self.assertNotIn("checkout_key", data)
 
     def test_existing_checkout_session_is_included_in_response(self):
@@ -74,16 +82,20 @@ class PaymentSerializerTests(TestCase):
         original_data = dict(PaymentSerializer(self.payment).data)
         for partial in (False, True):
             with self.subTest(partial=partial):
-                serializer = PaymentSerializer(self.payment, data={
-                    "id": 999999,
-                    "borrowing": 999999,
-                    "status": "PAID",
-                    "type": "FINE",
-                    "session_id": "cs_test_forged",
-                    "session_url": "https://example.com/forged",
-                    "money_to_pay": "0.00",
-                    "checkout_key": "00000000-0000-0000-0000-000000000000",
-                }, partial=partial)
+                serializer = PaymentSerializer(
+                    self.payment,
+                    data={
+                        "id": 999999,
+                        "borrowing": 999999,
+                        "status": "PAID",
+                        "type": "FINE",
+                        "session_id": "cs_test_forged",
+                        "session_url": "https://example.com/forged",
+                        "money_to_pay": "0.00",
+                        "checkout_key": "00000000-0000-0000-0000-000000000000",
+                    },
+                    partial=partial,
+                )
 
                 self.assertTrue(serializer.is_valid(), serializer.errors)
                 self.assertEqual(serializer.validated_data, {})
@@ -105,7 +117,10 @@ class SessionQuerySerializerTests(SimpleTestCase):
 
     def test_missing_empty_or_null_session_id_is_rejected(self):
         cases: tuple[dict[str, object], ...] = (
-            {}, {"session_id": ""}, {"session_id": " \t\n "}, {"session_id": None},
+            {},
+            {"session_id": ""},
+            {"session_id": " \t\n "},
+            {"session_id": None},
         )
         for payload in cases:
             with self.subTest(payload=payload):
@@ -137,7 +152,11 @@ class PaymentResultSerializerTests(SimpleTestCase):
             ("cancelled", "Checkout paused."),
         ):
             with self.subTest(status=status):
-                serializer = PaymentResultSerializer({
-                    "status": status, "detail": detail, "internal_field": "private",
-                })
+                serializer = PaymentResultSerializer(
+                    {
+                        "status": status,
+                        "detail": detail,
+                        "internal_field": "private",
+                    }
+                )
                 self.assertEqual(serializer.data, {"status": status, "detail": detail})

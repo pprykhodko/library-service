@@ -32,20 +32,20 @@ from payments.services import create_return_fine, lock_borrower
     create=extend_schema(
         summary="Borrow a book",
         description=(
-                "Customers and administrators may borrow for themselves. "
-                "The server assigns the user and borrowing date and reduces inventory."
-                " Outstanding payments or fines prevent new borrowings."
-        )
-    )
+            "Customers and administrators may borrow for themselves. "
+            "The server assigns the user and borrowing date and reduces inventory."
+            " Outstanding payments or fines prevent new borrowings."
+        ),
+    ),
 )
 class BorrowingViewSet(
     mixins.CreateModelMixin,
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
-    viewsets.GenericViewSet
+    viewsets.GenericViewSet,
 ):
-    queryset = (
-        Borrowing.objects.select_related("book", "user").prefetch_related("payments")
+    queryset = Borrowing.objects.select_related("book", "user").prefetch_related(
+        "payments"
     )
     serializer_class = BorrowingSerializer
     permission_classes = (CanAccessBorrowings,)
@@ -96,13 +96,13 @@ class BorrowingViewSet(
     @extend_schema(
         summary="Confirm a book return",
         description=(
-                "Employees and administrators only. Sets today's return date and "
-                "restores one copy. Repeated returns are rejected. No body is required."
-                " An overdue return creates one fine: overdue days times the saved "
-                "daily fee times 2, with a minimum nonzero fine of 0.50 USD."
+            "Employees and administrators only. Sets today's return date and "
+            "restores one copy. Repeated returns are rejected. No body is required."
+            " An overdue return creates one fine: overdue days times the saved "
+            "daily fee times 2, with a minimum nonzero fine of 0.50 USD."
         ),
         request=BorrowingReturnSerializer,
-        responses={200: BorrowingDetailSerializer}
+        responses={200: BorrowingDetailSerializer},
     )
     @action(detail=True, methods=["post"], url_path="return")
     def return_book(self, request, pk=None):
@@ -113,15 +113,16 @@ class BorrowingViewSet(
             lock_borrower(borrowing.user_id)
             borrowing.refresh_from_db()
             updated = Borrowing.objects.filter(
-                pk=borrowing.pk, actual_return_date__isnull=True,
-                borrow_date__lte=today
+                pk=borrowing.pk, actual_return_date__isnull=True, borrow_date__lte=today
             ).update(actual_return_date=today)
 
             if not updated:
                 raise serializers.ValidationError(
                     {
-                        "detail":
-                            "This borrowing is already returned or starts in the future"
+                        "detail": (
+                            "This borrowing is already returned "
+                            "or starts in the future"
+                        )
                     }
                 )
             create_return_fine(borrowing, today)
@@ -130,6 +131,8 @@ class BorrowingViewSet(
             )
         borrowing = self.get_queryset().get(pk=borrowing.pk)
 
-        return Response(BorrowingDetailSerializer(
-            borrowing, context=self.get_serializer_context()
-        ).data)
+        return Response(
+            BorrowingDetailSerializer(
+                borrowing, context=self.get_serializer_context()
+            ).data
+        )

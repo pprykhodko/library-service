@@ -12,7 +12,6 @@ from payments.models import Payment
 from users.models import User
 from users.roles import EMPLOYEE, assign_role
 
-
 BORROWINGS_URL = reverse("borrowings:borrowings-list")
 
 
@@ -41,8 +40,10 @@ class BorrowingApiTests(APITestCase):
         assign_role(cls.employee, EMPLOYEE)
         cls.admin = User.objects.create_superuser("admin@example.com", "Password!2026")
         cls.book = Book.objects.create(
-            title="The Hobbit", author="J. R. R. Tolkien",
-            inventory=3, daily_fee=Decimal("1.50"),
+            title="The Hobbit",
+            author="J. R. R. Tolkien",
+            inventory=3,
+            daily_fee=Decimal("1.50"),
         )
 
     def setUp(self) -> None:
@@ -53,12 +54,17 @@ class BorrowingApiTests(APITestCase):
         }
 
     def make_borrowing(
-        self, user: User | None = None, *, returned: bool = False,
-        overdue: bool = False, fee: Decimal | None = Decimal("1.50"),
+        self,
+        user: User | None = None,
+        *,
+        returned: bool = False,
+        overdue: bool = False,
+        fee: Decimal | None = Decimal("1.50"),
     ) -> Borrowing:
         # Existing records are fixtures; inventory is the currently available stock.
         return Borrowing.objects.create(
-            user=user or self.customer, book=self.book,
+            user=user or self.customer,
+            book=self.book,
             borrow_date=self.today - timedelta(days=3),
             expected_return_date=(
                 self.today - timedelta(days=1) if overdue else self.today
@@ -71,9 +77,14 @@ class BorrowingApiTests(APITestCase):
         borrowing = self.make_borrowing()
         self.assertEqual(self.client.get(BORROWINGS_URL).status_code, 401)
         self.assertEqual(self.client.get(detail_url(borrowing)).status_code, 401)
-        self.assertEqual(self.client.post(
-            BORROWINGS_URL, self.payload, format="json",
-        ).status_code, 401)
+        self.assertEqual(
+            self.client.post(
+                BORROWINGS_URL,
+                self.payload,
+                format="json",
+            ).status_code,
+            401,
+        )
         self.assertEqual(self.client.post(return_url(borrowing)).status_code, 401)
         self.book.refresh_from_db()
         borrowing.refresh_from_db()
@@ -91,8 +102,9 @@ class BorrowingApiTests(APITestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["count"], 2)
-        self.assertEqual([item["id"] for item in response.data["results"]],
-                         [returned.pk, active.pk])
+        self.assertEqual(
+            [item["id"] for item in response.data["results"]], [returned.pk, active.pk]
+        )
         self.assertEqual(response.data["results"][0]["book"], self.book.title)
         self.assertEqual(response.data["results"][0]["user"], self.customer.email)
 
@@ -112,9 +124,12 @@ class BorrowingApiTests(APITestCase):
         self.make_borrowing()
         self.make_borrowing(user=self.other_customer)
         self.client.force_authenticate(self.customer)
-        response = self.client.get(BORROWINGS_URL, {
-            "user_id": self.other_customer.pk,
-        })
+        response = self.client.get(
+            BORROWINGS_URL,
+            {
+                "user_id": self.other_customer.pk,
+            },
+        )
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["count"], 0)
@@ -140,9 +155,14 @@ class BorrowingApiTests(APITestCase):
         self.client.force_authenticate(self.customer)
         self.assertEqual(self.client.get(BORROWINGS_URL).status_code, 403)
         self.assertEqual(self.client.get(detail_url(borrowing)).status_code, 403)
-        self.assertEqual(self.client.post(
-            BORROWINGS_URL, self.payload, format="json",
-        ).status_code, 403)
+        self.assertEqual(
+            self.client.post(
+                BORROWINGS_URL,
+                self.payload,
+                format="json",
+            ).status_code,
+            403,
+        )
         self.assertEqual(self.client.post(return_url(borrowing)).status_code, 403)
 
     def test_customer_and_admin_can_borrow_only_for_themselves(self):
@@ -150,11 +170,15 @@ class BorrowingApiTests(APITestCase):
             with self.subTest(user=user.email):
                 self.client.force_authenticate(user)
                 payload = self.payload.copy()
-                payload.update({
-                    "user": self.other_customer.pk, "daily_fee": "0.00",
-                    "actual_return_date": self.today.isoformat(),
-                    "borrow_date": "2000-01-01", "payments": [{"status": "PAID"}],
-                })
+                payload.update(
+                    {
+                        "user": self.other_customer.pk,
+                        "daily_fee": "0.00",
+                        "actual_return_date": self.today.isoformat(),
+                        "borrow_date": "2000-01-01",
+                        "payments": [{"status": "PAID"}],
+                    }
+                )
                 response = self.client.post(BORROWINGS_URL, payload, format="json")
                 self.assertEqual(response.status_code, 201, response.data)
                 borrowing = Borrowing.objects.get(pk=response.data["id"])
@@ -198,11 +222,15 @@ class BorrowingApiTests(APITestCase):
             for status in (Payment.Status.PENDING, Payment.Status.EXPIRED):
                 with self.subTest(payment_type=payment_type, status=status):
                     payment = Payment.objects.create(
-                        borrowing=existing, type=payment_type, status=status,
+                        borrowing=existing,
+                        type=payment_type,
+                        status=status,
                         money_to_pay=Decimal("1.50"),
                     )
                     response = self.client.post(
-                        BORROWINGS_URL, self.payload, format="json",
+                        BORROWINGS_URL,
+                        self.payload,
+                        format="json",
                     )
                     self.assertEqual(response.status_code, 400)
                     self.assertIn("detail", response.data)
@@ -217,9 +245,13 @@ class BorrowingApiTests(APITestCase):
         self.client.force_authenticate(self.admin)
         for method in (self.client.put, self.client.patch, self.client.delete):
             with self.subTest(method=method.__name__):
-                response = method(detail_url(borrowing), {
-                    "actual_return_date": self.today.isoformat(),
-                }, format="json")
+                response = method(
+                    detail_url(borrowing),
+                    {
+                        "actual_return_date": self.today.isoformat(),
+                    },
+                    format="json",
+                )
                 self.assertEqual(response.status_code, 405)
         borrowing.refresh_from_db()
         self.assertIsNone(borrowing.actual_return_date)
@@ -244,8 +276,9 @@ class BorrowingApiTests(APITestCase):
                 self.client.force_authenticate(user)
                 response = self.client.post(return_url(borrowing))
                 self.assertEqual(response.status_code, 200, response.data)
-                self.assertEqual(response.data["actual_return_date"],
-                                 self.today.isoformat())
+                self.assertEqual(
+                    response.data["actual_return_date"], self.today.isoformat()
+                )
                 self.assertEqual(response.data["book"]["id"], self.book.pk)
                 borrowing.refresh_from_db()
                 self.assertEqual(borrowing.actual_return_date, self.today)
@@ -257,10 +290,14 @@ class BorrowingApiTests(APITestCase):
         borrowing = self.make_borrowing(overdue=True)
         Book.objects.filter(pk=self.book.pk).update(daily_fee=Decimal("9.00"))
         self.client.force_authenticate(self.employee)
-        response = self.client.post(return_url(borrowing), {
-            "actual_return_date": borrowing.expected_return_date.isoformat(),
-            "daily_fee": "0.00",
-        }, format="json")
+        response = self.client.post(
+            return_url(borrowing),
+            {
+                "actual_return_date": borrowing.expected_return_date.isoformat(),
+                "daily_fee": "0.00",
+            },
+            format="json",
+        )
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["actual_return_date"], self.today.isoformat())
@@ -317,7 +354,8 @@ class BorrowingApiTests(APITestCase):
     def test_unpaid_rental_does_not_prevent_book_return(self):
         borrowing = self.make_borrowing()
         payment = Payment.objects.create(
-            borrowing=borrowing, money_to_pay=Decimal("4.50"),
+            borrowing=borrowing,
+            money_to_pay=Decimal("4.50"),
         )
         self.client.force_authenticate(self.employee)
         self.assertEqual(self.client.post(return_url(borrowing)).status_code, 200)
@@ -328,8 +366,11 @@ class BorrowingApiTests(APITestCase):
     def test_future_borrowing_cannot_be_returned(self):
         tomorrow = self.today + timedelta(days=1)
         borrowing = Borrowing.objects.create(
-            book=self.book, user=self.customer, borrow_date=tomorrow,
-            expected_return_date=tomorrow, daily_fee=Decimal("1.50"),
+            book=self.book,
+            user=self.customer,
+            borrow_date=tomorrow,
+            expected_return_date=tomorrow,
+            daily_fee=Decimal("1.50"),
         )
         self.client.force_authenticate(self.employee)
         response = self.client.post(return_url(borrowing))
@@ -347,8 +388,9 @@ class BorrowingApiTests(APITestCase):
         self.client.force_authenticate(self.employee)
         response = self.client.get(BORROWINGS_URL, {"user_id": self.customer.pk})
         self.assertEqual(response.status_code, 200)
-        self.assertSetEqual({item["id"] for item in response.data["results"]},
-                            {active.pk, returned.pk})
+        self.assertSetEqual(
+            {item["id"] for item in response.data["results"]}, {active.pk, returned.pk}
+        )
 
     def test_active_filter_handles_true_and_false_with_user_filter(self):
         active = self.make_borrowing()
@@ -358,17 +400,25 @@ class BorrowingApiTests(APITestCase):
         self.client.force_authenticate(self.employee)
         for value, expected_id in (("true", active.pk), ("false", returned.pk)):
             with self.subTest(value=value):
-                response = self.client.get(BORROWINGS_URL, {
-                    "user_id": self.customer.pk, "is_active": value,
-                })
+                response = self.client.get(
+                    BORROWINGS_URL,
+                    {
+                        "user_id": self.customer.pk,
+                        "is_active": value,
+                    },
+                )
                 self.assertEqual(response.status_code, 200)
-                self.assertEqual([item["id"] for item in response.data["results"]],
-                                 [expected_id])
+                self.assertEqual(
+                    [item["id"] for item in response.data["results"]], [expected_id]
+                )
 
     def test_invalid_filters_return_400(self):
         self.client.force_authenticate(self.customer)
-        for field, value in (("user_id", "0"), ("user_id", "abc"),
-                             ("is_active", "maybe")):
+        for field, value in (
+            ("user_id", "0"),
+            ("user_id", "abc"),
+            ("is_active", "maybe"),
+        ):
             with self.subTest(field=field, value=value):
                 response = self.client.get(BORROWINGS_URL, {field: value})
                 self.assertEqual(response.status_code, 400)
@@ -391,15 +441,23 @@ class BorrowingApiTests(APITestCase):
         self.assertIsNone(page_two.data["next"])
         self.assertIsNotNone(page_two.data["previous"])
         results = page_one.data["results"] + page_two.data["results"]
-        self.assertEqual([item["id"] for item in results],
-                         [latest.pk, first.pk, older.pk])
+        self.assertEqual(
+            [item["id"] for item in results], [latest.pk, first.pk, older.pk]
+        )
 
     def test_default_and_maximum_page_sizes(self):
-        Borrowing.objects.bulk_create([
-            Borrowing(book=self.book, user=self.customer, borrow_date=self.today,
-                      expected_return_date=self.today, daily_fee=Decimal("1.50"))
-            for _ in range(101)
-        ])
+        Borrowing.objects.bulk_create(
+            [
+                Borrowing(
+                    book=self.book,
+                    user=self.customer,
+                    borrow_date=self.today,
+                    expected_return_date=self.today,
+                    daily_fee=Decimal("1.50"),
+                )
+                for _ in range(101)
+            ]
+        )
         self.client.force_authenticate(self.customer)
         response = self.client.get(BORROWINGS_URL)
         self.assertEqual(response.status_code, 200)
@@ -412,12 +470,22 @@ class BorrowingApiTests(APITestCase):
 
     def test_missing_borrowing_and_page_return_404(self):
         self.client.force_authenticate(self.employee)
-        self.assertEqual(self.client.get(
-            reverse("borrowings:borrowings-detail", args=[999999]),
-        ).status_code, 404)
-        self.assertEqual(self.client.post(
-            reverse("borrowings:borrowings-return-book", args=[999999]),
-        ).status_code, 404)
-        self.assertEqual(self.client.get(
-            BORROWINGS_URL, {"page": 999999},
-        ).status_code, 404)
+        self.assertEqual(
+            self.client.get(
+                reverse("borrowings:borrowings-detail", args=[999999]),
+            ).status_code,
+            404,
+        )
+        self.assertEqual(
+            self.client.post(
+                reverse("borrowings:borrowings-return-book", args=[999999]),
+            ).status_code,
+            404,
+        )
+        self.assertEqual(
+            self.client.get(
+                BORROWINGS_URL,
+                {"page": 999999},
+            ).status_code,
+            404,
+        )

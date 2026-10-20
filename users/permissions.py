@@ -8,15 +8,15 @@ class CanManageOwnProfile(BasePermission):
         if not request.user.is_authenticated:
             return False
 
-        return (
-                request.method in SAFE_METHODS
-                or get_role(request.user) in (CUSTOMER, ADMIN)
+        return request.method in SAFE_METHODS or get_role(request.user) in (
+            CUSTOMER,
+            ADMIN,
         )
 
 
 class CanReadCustomers(BasePermission):
     def has_permission(self, request, view):
-        return (
-                request.user.is_authenticated and get_role(request.user)
-                in (EMPLOYEE, ADMIN)
+        return request.user.is_authenticated and get_role(request.user) in (
+            EMPLOYEE,
+            ADMIN,
         )

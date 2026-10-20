@@ -17,7 +17,6 @@ from payments.models import Payment
 from users.models import User
 from users.roles import EMPLOYEE, assign_role
 
-
 PAYMENTS_URL = reverse("payments:payments-list")
 WEBHOOK_URL = reverse("payments:webhook")
 SUCCESS_URL = reverse("payments:success")
@@ -30,7 +29,8 @@ def payment_url(payment: Payment, action: str = "detail") -> str:
 
 @override_settings(
     PASSWORD_HASHERS=["django.contrib.auth.hashers.MD5PasswordHasher"],
-    STRIPE_SECRET_KEY="sk_test_fake", STRIPE_WEBHOOK_SECRET=SECRET,
+    STRIPE_SECRET_KEY="sk_test_fake",
+    STRIPE_WEBHOOK_SECRET=SECRET,
     PAYMENTS_BASE_URL="http://testserver",
 )
 class PaymentApiTests(APITestCase):
@@ -51,19 +51,29 @@ class PaymentApiTests(APITestCase):
         assign_role(cls.employee, EMPLOYEE)
         cls.admin = User.objects.create_superuser("admin@example.com", "Password!2026")
         cls.book = Book.objects.create(
-            title="The Hobbit", author="J. R. R. Tolkien",
-            inventory=3, daily_fee=Decimal("1.50"),
+            title="The Hobbit",
+            author="J. R. R. Tolkien",
+            inventory=3,
+            daily_fee=Decimal("1.50"),
         )
         for user, attribute in (
-            (cls.customer, "payment"), (cls.other_customer, "other_payment"),
+            (cls.customer, "payment"),
+            (cls.other_customer, "other_payment"),
         ):
             borrowing = Borrowing.objects.create(
-                book=cls.book, user=user, expected_return_date=timezone.localdate(),
+                book=cls.book,
+                user=user,
+                expected_return_date=timezone.localdate(),
                 daily_fee=cls.book.daily_fee,
             )
-            setattr(cls, attribute, Payment.objects.create(
-                borrowing=borrowing, money_to_pay=Decimal("1.50"),
-            ))
+            setattr(
+                cls,
+                attribute,
+                Payment.objects.create(
+                    borrowing=borrowing,
+                    money_to_pay=Decimal("1.50"),
+                ),
+            )
 
     def setUp(self) -> None:
         patcher = patch("payments.services.stripe.StripeClient")
@@ -76,39 +86,56 @@ class PaymentApiTests(APITestCase):
     def session_data(self, **overrides) -> dict:
         self.payment.refresh_from_db()
         data = {
-            "object": "checkout.session", "id": "cs_test_current",
+            "object": "checkout.session",
+            "id": "cs_test_current",
             "url": "https://checkout.stripe.com/c/pay/cs_test_current",
             "metadata": {"payment_id": str(self.payment.pk)},
             "client_reference_id": str(self.payment.checkout_key),
-            "amount_total": 150, "currency": "usd", "mode": "payment",
-            "status": "complete", "payment_status": "paid",
+            "amount_total": 150,
+            "currency": "usd",
+            "mode": "payment",
+            "status": "complete",
+            "payment_status": "paid",
         }
         data.update(overrides)
         return data
 
     def create_session(self, *, params, options):
-        return stripe.checkout.Session.construct_from(self.session_data(
-            status="open", payment_status="unpaid",
-            client_reference_id=params["client_reference_id"],
-        ), "sk_test_fake")
+        return stripe.checkout.Session.construct_from(
+            self.session_data(
+                status="open",
+                payment_status="unpaid",
+                client_reference_id=params["client_reference_id"],
+            ),
+            "sk_test_fake",
+        )
 
     def mock_retrieve(self, data: dict) -> None:
         self.sessions.retrieve.side_effect = None
         self.sessions.retrieve.return_value = stripe.checkout.Session.construct_from(
-            data, "sk_test_fake",
+            data,
+            "sk_test_fake",
         )
 
     def signed_webhook(self, event_type: str, session: dict):
-        payload = json.dumps({
-            "id": "evt_test_example", "object": "event", "type": event_type,
-            "data": {"object": session},
-        }).encode()
+        payload = json.dumps(
+            {
+                "id": "evt_test_example",
+                "object": "event",
+                "type": event_type,
+                "data": {"object": session},
+            }
+        ).encode()
         timestamp = str(int(time.time()))
         signature = hmac.new(
-            SECRET.encode(), timestamp.encode() + b"." + payload, hashlib.sha256,
+            SECRET.encode(),
+            timestamp.encode() + b"." + payload,
+            hashlib.sha256,
         ).hexdigest()
         return self.client.post(
-            WEBHOOK_URL, payload, content_type="application/json",
+            WEBHOOK_URL,
+            payload,
+            content_type="application/json",
             HTTP_STRIPE_SIGNATURE=f"t={timestamp},v1={signature}",
         )
 
@@ -146,8 +173,9 @@ class PaymentApiTests(APITestCase):
                 response = self.client.get(PAYMENTS_URL)
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(response.data["count"], 2)
-                self.assertEqual(self.client.get(payment_url(self.payment)).status_code,
-                                 200)
+                self.assertEqual(
+                    self.client.get(payment_url(self.payment)).status_code, 200
+                )
 
     def test_employee_cannot_checkout_or_renew(self):
         self.client.force_authenticate(self.employee)
@@ -169,12 +197,20 @@ class PaymentApiTests(APITestCase):
         for user in (self.customer, self.admin):
             with self.subTest(user=user.email):
                 self.client.force_authenticate(user)
-                self.mock_retrieve(self.session_data(
-                    status="open", payment_status="unpaid",
-                ))
-                response = self.client.post(payment_url(self.payment, "checkout"), {
-                    "money_to_pay": "0.00", "status": "PAID",
-                }, format="json")
+                self.mock_retrieve(
+                    self.session_data(
+                        status="open",
+                        payment_status="unpaid",
+                    )
+                )
+                response = self.client.post(
+                    payment_url(self.payment, "checkout"),
+                    {
+                        "money_to_pay": "0.00",
+                        "status": "PAID",
+                    },
+                    format="json",
+                )
                 self.assertEqual(response.status_code, 200, response.data)
                 self.assertEqual(response.data["id"], self.payment.pk)
                 self.assertEqual(response.data["money_to_pay"], "1.50")
@@ -190,17 +226,23 @@ class PaymentApiTests(APITestCase):
                 self.payment.session_id = old_id
                 self.payment.status = Payment.Status.EXPIRED
                 self.payment.save(update_fields=["session_id", "status"])
-                self.mock_retrieve(self.session_data(
-                    id=old_id, status="expired", payment_status="unpaid",
-                ))
+                self.mock_retrieve(
+                    self.session_data(
+                        id=old_id,
+                        status="expired",
+                        payment_status="unpaid",
+                    )
+                )
                 self.client.force_authenticate(user)
                 response = self.client.post(payment_url(self.payment, "renew"))
                 self.assertEqual(response.status_code, 200, response.data)
                 self.assertEqual(response.data["status"], "PENDING")
                 self.assertEqual(response.data["session_id"], "cs_test_current")
-                self.assertTrue(self.payment.expired_sessions.filter(
-                    session_id=old_id,
-                ).exists())
+                self.assertTrue(
+                    self.payment.expired_sessions.filter(
+                        session_id=old_id,
+                    ).exists()
+                )
         self.book.refresh_from_db()
         self.assertEqual(self.book.inventory, 3)
         self.assertEqual(Payment.objects.count(), 2)
@@ -261,9 +303,12 @@ class PaymentApiTests(APITestCase):
         self.assertEqual(Payment.objects.count(), 2)
 
     def test_success_does_not_confirm_unpaid_session(self):
-        self.mock_retrieve(self.session_data(
-            status="complete", payment_status="unpaid",
-        ))
+        self.mock_retrieve(
+            self.session_data(
+                status="complete",
+                payment_status="unpaid",
+            )
+        )
         response = self.client.get(SUCCESS_URL, {"session_id": "cs_test_current"})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["status"], "PENDING")
@@ -282,7 +327,8 @@ class PaymentApiTests(APITestCase):
             with self.subTest(expected=expected):
                 self.sessions.retrieve.side_effect = error
                 response = self.client.get(
-                    SUCCESS_URL, {"session_id": "cs_test_unknown"},
+                    SUCCESS_URL,
+                    {"session_id": "cs_test_unknown"},
                 )
                 self.assertEqual(response.status_code, expected)
         self.payment.refresh_from_db()
@@ -300,7 +346,8 @@ class PaymentApiTests(APITestCase):
 
     def test_signed_completed_and_async_succeeded_webhooks_confirm_payment(self):
         for event_type in (
-            "checkout.session.completed", "checkout.session.async_payment_succeeded",
+            "checkout.session.completed",
+            "checkout.session.async_payment_succeeded",
         ):
             with self.subTest(event_type=event_type):
                 Payment.objects.filter(pk=self.payment.pk).update(
@@ -330,7 +377,8 @@ class PaymentApiTests(APITestCase):
         self.payment.refresh_from_db()
         self.assertEqual(self.payment.status, Payment.Status.EXPIRED)
         response = self.signed_webhook(
-            "checkout.session.completed", self.session_data(),
+            "checkout.session.completed",
+            self.session_data(),
         )
         self.assertEqual(response.status_code, 200)
         response = self.signed_webhook("checkout.session.expired", expired)
@@ -342,7 +390,9 @@ class PaymentApiTests(APITestCase):
         for signature in ("", "t=1,v1=invalid"):
             with self.subTest(signature=signature):
                 response = self.client.post(
-                    WEBHOOK_URL, b'{}', content_type="application/json",
+                    WEBHOOK_URL,
+                    b"{}",
+                    content_type="application/json",
                     HTTP_STRIPE_SIGNATURE=signature,
                 )
                 self.assertEqual(response.status_code, 400)
@@ -351,7 +401,8 @@ class PaymentApiTests(APITestCase):
 
     def test_signed_webhook_with_wrong_amount_cannot_mark_payment_paid(self):
         response = self.signed_webhook(
-            "checkout.session.completed", self.session_data(amount_total=1),
+            "checkout.session.completed",
+            self.session_data(amount_total=1),
         )
         self.assertEqual(response.status_code, 400)
         self.payment.refresh_from_db()

@@ -21,22 +21,29 @@ class PaymentModelTests(TestCase):
     @classmethod
     def setUpTestData(cls) -> None:
         book = Book.objects.create(
-            title="The Hobbit", author="J. R. R. Tolkien",
-            inventory=3, daily_fee=Decimal("1.50"),
+            title="The Hobbit",
+            author="J. R. R. Tolkien",
+            inventory=3,
+            daily_fee=Decimal("1.50"),
         )
         user = User.objects.create_user("reader@example.com")
         cls.borrowing = Borrowing.objects.create(
-            book=book, user=user, expected_return_date=timezone.localdate(),
+            book=book,
+            user=user,
+            expected_return_date=timezone.localdate(),
             daily_fee=book.daily_fee,
         )
         cls.other_borrowing = Borrowing.objects.create(
-            book=book, user=user, expected_return_date=timezone.localdate(),
+            book=book,
+            user=user,
+            expected_return_date=timezone.localdate(),
             daily_fee=book.daily_fee,
         )
 
     def setUp(self) -> None:
         self.payment = Payment(
-            borrowing=self.borrowing, money_to_pay=Decimal("4.50"),
+            borrowing=self.borrowing,
+            money_to_pay=Decimal("4.50"),
         )
 
     def test_valid_payment_can_be_saved_with_defaults(self):
@@ -75,7 +82,9 @@ class PaymentModelTests(TestCase):
 
     def test_supported_statuses_and_types_are_valid(self):
         for status in (
-            Payment.Status.PENDING, Payment.Status.PAID, Payment.Status.EXPIRED,
+            Payment.Status.PENDING,
+            Payment.Status.PAID,
+            Payment.Status.EXPIRED,
         ):
             for payment_type in (Payment.Type.PAYMENT, Payment.Type.FINE):
                 with self.subTest(status=status, payment_type=payment_type):
@@ -115,33 +124,41 @@ class PaymentModelTests(TestCase):
     def test_rental_and_fine_can_coexist_for_one_borrowing(self):
         self.payment.save()
         fine = Payment.objects.create(
-            borrowing=self.borrowing, type=Payment.Type.FINE,
+            borrowing=self.borrowing,
+            type=Payment.Type.FINE,
             money_to_pay=Decimal("3.00"),
         )
-        self.assertSetEqual(set(self.borrowing.payments.values_list("pk", flat=True)),
-                            {self.payment.pk, fine.pk})
+        self.assertSetEqual(
+            set(self.borrowing.payments.values_list("pk", flat=True)),
+            {self.payment.pk, fine.pk},
+        )
 
     def test_duplicate_payment_type_is_rejected_even_if_original_is_paid(self):
         for payment_type in (Payment.Type.PAYMENT, Payment.Type.FINE):
             with self.subTest(payment_type=payment_type):
                 original = Payment.objects.create(
-                    borrowing=self.borrowing, type=payment_type,
-                    status=Payment.Status.PAID, money_to_pay=Decimal("1.50"),
+                    borrowing=self.borrowing,
+                    type=payment_type,
+                    status=Payment.Status.PAID,
+                    money_to_pay=Decimal("1.50"),
                 )
                 with self.assertRaises(IntegrityError), transaction.atomic():
                     Payment.objects.create(
-                        borrowing=self.borrowing, type=payment_type,
+                        borrowing=self.borrowing,
+                        type=payment_type,
                         money_to_pay=Decimal("1.50"),
                     )
                 self.assertEqual(
-                    self.borrowing.payments.filter(type=payment_type).count(), 1,
+                    self.borrowing.payments.filter(type=payment_type).count(),
+                    1,
                 )
                 self.assertTrue(Payment.objects.filter(pk=original.pk).exists())
 
     def test_same_payment_type_is_allowed_for_different_borrowings(self):
         self.payment.save()
         other = Payment.objects.create(
-            borrowing=self.other_borrowing, money_to_pay=Decimal("1.50"),
+            borrowing=self.other_borrowing,
+            money_to_pay=Decimal("1.50"),
         )
         self.assertEqual(Payment.objects.count(), 2)
         self.assertNotEqual(self.payment.checkout_key, other.checkout_key)
@@ -152,7 +169,8 @@ class PaymentModelTests(TestCase):
         self.payment.session_id = "cs_test_unique"
         self.payment.save()
         other = Payment.objects.create(
-            borrowing=self.other_borrowing, money_to_pay=Decimal("1.50"),
+            borrowing=self.other_borrowing,
+            money_to_pay=Decimal("1.50"),
         )
         original_key = other.checkout_key
         for changes in (
@@ -182,16 +200,20 @@ class PaymentModelTests(TestCase):
     def test_default_ordering_is_newest_first(self):
         self.payment.save()
         fine = Payment.objects.create(
-            borrowing=self.borrowing, type=Payment.Type.FINE,
+            borrowing=self.borrowing,
+            type=Payment.Type.FINE,
             money_to_pay=Decimal("3.00"),
         )
-        self.assertEqual(list(Payment.objects.values_list("pk", flat=True)),
-                         [fine.pk, self.payment.pk])
+        self.assertEqual(
+            list(Payment.objects.values_list("pk", flat=True)),
+            [fine.pk, self.payment.pk],
+        )
 
     def test_string_representation_contains_amount_and_status(self):
         self.payment.save()
         self.assertEqual(
-            str(self.payment), f"Payment {self.payment.pk}: 4.50 USD (PENDING)",
+            str(self.payment),
+            f"Payment {self.payment.pk}: 4.50 USD (PENDING)",
         )
 
 
@@ -202,26 +224,37 @@ class ExpiredCheckoutSessionModelTests(TestCase):
     @classmethod
     def setUpTestData(cls) -> None:
         book = Book.objects.create(
-            title="The Hobbit", author="J. R. R. Tolkien",
-            inventory=3, daily_fee=Decimal("1.50"),
+            title="The Hobbit",
+            author="J. R. R. Tolkien",
+            inventory=3,
+            daily_fee=Decimal("1.50"),
         )
         user = User.objects.create_user("reader@example.com")
         borrowing = Borrowing.objects.create(
-            book=book, user=user, expected_return_date=timezone.localdate(),
+            book=book,
+            user=user,
+            expected_return_date=timezone.localdate(),
         )
         cls.payment = Payment.objects.create(
-            borrowing=borrowing, money_to_pay=Decimal("4.50"),
+            borrowing=borrowing,
+            money_to_pay=Decimal("4.50"),
         )
         cls.other_payment = Payment.objects.create(
-            borrowing=borrowing, type=Payment.Type.FINE, money_to_pay=Decimal("3.00"),
+            borrowing=borrowing,
+            type=Payment.Type.FINE,
+            money_to_pay=Decimal("3.00"),
         )
 
     def test_multiple_old_sessions_can_belong_to_one_payment(self):
         first = ExpiredCheckoutSession.objects.create(
-            payment=self.payment, session_id="cs_test_old_1", checkout_key=uuid.uuid4(),
+            payment=self.payment,
+            session_id="cs_test_old_1",
+            checkout_key=uuid.uuid4(),
         )
         second = ExpiredCheckoutSession.objects.create(
-            payment=self.payment, session_id="cs_test_old_2", checkout_key=uuid.uuid4(),
+            payment=self.payment,
+            session_id="cs_test_old_2",
+            checkout_key=uuid.uuid4(),
         )
         self.assertSetEqual(
             set(self.payment.expired_sessions.values_list("pk", flat=True)),
@@ -232,7 +265,9 @@ class ExpiredCheckoutSessionModelTests(TestCase):
 
     def test_archived_session_id_and_key_are_unique_across_payments(self):
         session = ExpiredCheckoutSession.objects.create(
-            payment=self.payment, session_id="cs_test_old", checkout_key=uuid.uuid4(),
+            payment=self.payment,
+            session_id="cs_test_old",
+            checkout_key=uuid.uuid4(),
         )
         for session_id, checkout_key in (
             (session.session_id, uuid.uuid4()),
@@ -241,7 +276,8 @@ class ExpiredCheckoutSessionModelTests(TestCase):
             with self.subTest(session_id=session_id):
                 with self.assertRaises(IntegrityError), transaction.atomic():
                     ExpiredCheckoutSession.objects.create(
-                        payment=self.other_payment, session_id=session_id,
+                        payment=self.other_payment,
+                        session_id=session_id,
                         checkout_key=checkout_key,
                     )
         self.assertEqual(ExpiredCheckoutSession.objects.count(), 1)
@@ -249,7 +285,9 @@ class ExpiredCheckoutSessionModelTests(TestCase):
 
     def test_archived_session_protects_payment_from_deletion(self):
         session = ExpiredCheckoutSession.objects.create(
-            payment=self.payment, session_id="cs_test_old", checkout_key=uuid.uuid4(),
+            payment=self.payment,
+            session_id="cs_test_old",
+            checkout_key=uuid.uuid4(),
         )
         with self.assertRaises(ProtectedError):
             self.payment.delete()

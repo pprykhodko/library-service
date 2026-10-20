@@ -20,9 +20,9 @@ class RoleFormMixin:
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["role"].initial = get_role(self.instance) if (
-            self.instance.pk
-        ) else CUSTOMER
+        self.fields["role"].initial = (
+            get_role(self.instance) if (self.instance.pk) else CUSTOMER
+        )
 
 
 class AdminUserCreationForm(RoleFormMixin, UserCreationForm):

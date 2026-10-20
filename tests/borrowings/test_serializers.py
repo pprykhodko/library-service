@@ -27,8 +27,10 @@ class BorrowingSerializerTests(TestCase):
     @classmethod
     def setUpTestData(cls) -> None:
         cls.book = Book.objects.create(
-            title="The Hobbit", author="J. R. R. Tolkien",
-            inventory=3, daily_fee=Decimal("1.50"),
+            title="The Hobbit",
+            author="J. R. R. Tolkien",
+            inventory=3,
+            daily_fee=Decimal("1.50"),
         )
         cls.user = User.objects.create_user("reader@example.com")
         cls.other_user = User.objects.create_user("other@example.com")
@@ -54,8 +56,10 @@ class BorrowingSerializerTests(TestCase):
     def test_validation_converts_book_id_and_date_without_writing_to_database(self):
         serializer = self.valid_serializer()
         self.assertEqual(serializer.validated_data["book"], self.book)
-        self.assertEqual(serializer.validated_data["expected_return_date"],
-                         self.today + timedelta(days=3))
+        self.assertEqual(
+            serializer.validated_data["expected_return_date"],
+            self.today + timedelta(days=3),
+        )
         self.assert_no_creation()
 
     def test_required_fields_cannot_be_omitted(self):
@@ -69,8 +73,12 @@ class BorrowingSerializerTests(TestCase):
         self.assert_no_creation()
 
     def test_invalid_dates_are_rejected(self):
-        for value in ((self.today - timedelta(days=1)).isoformat(),
-                      "not-a-date", "2026-02-30", None):
+        for value in (
+            (self.today - timedelta(days=1)).isoformat(),
+            "not-a-date",
+            "2026-02-30",
+            None,
+        ):
             with self.subTest(value=value):
                 self.payload["expected_return_date"] = value
                 serializer = BorrowingSerializer(data=self.payload)
@@ -91,7 +99,8 @@ class BorrowingSerializerTests(TestCase):
         for active, inventory in ((False, 3), (True, 0)):
             with self.subTest(active=active, inventory=inventory):
                 Book.objects.filter(pk=self.book.pk).update(
-                    is_active=active, inventory=inventory,
+                    is_active=active,
+                    inventory=inventory,
                 )
                 serializer = BorrowingSerializer(data=self.payload)
                 self.assertFalse(serializer.is_valid())
@@ -123,14 +132,20 @@ class BorrowingSerializerTests(TestCase):
         self.assertEqual(borrowing.payments.get().money_to_pay, Decimal("1.50"))
 
     def test_client_cannot_override_server_controlled_fields(self):
-        self.payload.update({
-            "id": 999999, "user": self.other_user.pk,
-            "borrow_date": "2000-01-01", "actual_return_date": self.today.isoformat(),
-            "daily_fee": "0.00", "payments": [{"status": "PAID"}],
-        })
+        self.payload.update(
+            {
+                "id": 999999,
+                "user": self.other_user.pk,
+                "borrow_date": "2000-01-01",
+                "actual_return_date": self.today.isoformat(),
+                "daily_fee": "0.00",
+                "payments": [{"status": "PAID"}],
+            }
+        )
         serializer = self.valid_serializer()
-        self.assertSetEqual(set(serializer.validated_data),
-                            {"book", "expected_return_date"})
+        self.assertSetEqual(
+            set(serializer.validated_data), {"book", "expected_return_date"}
+        )
         borrowing = serializer.save(user=self.user)
 
         self.assertNotEqual(borrowing.pk, 999999)
@@ -154,7 +169,8 @@ class BorrowingSerializerTests(TestCase):
                 Book.objects.filter(pk=self.book.pk).update(is_active=True, inventory=3)
                 serializer = self.valid_serializer()
                 Book.objects.filter(pk=self.book.pk).update(
-                    is_active=active, inventory=inventory,
+                    is_active=active,
+                    inventory=inventory,
                 )
                 with self.assertRaises(ValidationError) as error:
                     serializer.save(user=self.user)
@@ -167,8 +183,10 @@ class BorrowingSerializerTests(TestCase):
     def test_save_rechecks_date_if_day_changes_after_validation(self):
         self.payload["expected_return_date"] = self.today.isoformat()
         serializer = self.valid_serializer()
-        with patch("borrowings.serializers.timezone.localdate",
-                   return_value=self.today + timedelta(days=1)):
+        with patch(
+            "borrowings.serializers.timezone.localdate",
+            return_value=self.today + timedelta(days=1),
+        ):
             with self.assertRaises(ValidationError) as error:
                 serializer.save(user=self.user)
         self.assertIn("expected_return_date", error.exception.detail)
@@ -176,13 +194,17 @@ class BorrowingSerializerTests(TestCase):
 
     def test_pending_and_expired_rentals_and_fines_block_creation(self):
         existing = Borrowing.objects.create(
-            book=self.book, user=self.user, expected_return_date=self.today,
+            book=self.book,
+            user=self.user,
+            expected_return_date=self.today,
         )
         for status in (Payment.Status.PENDING, Payment.Status.EXPIRED):
             for payment_type in (Payment.Type.PAYMENT, Payment.Type.FINE):
                 with self.subTest(status=status, payment_type=payment_type):
                     payment = Payment.objects.create(
-                        borrowing=existing, status=status, type=payment_type,
+                        borrowing=existing,
+                        status=status,
+                        type=payment_type,
                         money_to_pay=Decimal("1.50"),
                     )
                     serializer = self.valid_serializer()
@@ -197,11 +219,15 @@ class BorrowingSerializerTests(TestCase):
 
     def test_paid_payments_do_not_block_new_borrowing(self):
         existing = Borrowing.objects.create(
-            book=self.book, user=self.user, expected_return_date=self.today,
+            book=self.book,
+            user=self.user,
+            expected_return_date=self.today,
         )
         for payment_type in (Payment.Type.PAYMENT, Payment.Type.FINE):
             Payment.objects.create(
-                borrowing=existing, status=Payment.Status.PAID, type=payment_type,
+                borrowing=existing,
+                status=Payment.Status.PAID,
+                type=payment_type,
                 money_to_pay=Decimal("1.50"),
             )
         borrowing = self.valid_serializer().save(user=self.user)
@@ -211,7 +237,9 @@ class BorrowingSerializerTests(TestCase):
 
     def test_another_users_debt_does_not_block_creation(self):
         existing = Borrowing.objects.create(
-            book=self.book, user=self.other_user, expected_return_date=self.today,
+            book=self.book,
+            user=self.other_user,
+            expected_return_date=self.today,
         )
         Payment.objects.create(borrowing=existing, money_to_pay=Decimal("1.50"))
         borrowing = self.valid_serializer().save(user=self.user)
@@ -246,7 +274,8 @@ class BorrowingSerializerTests(TestCase):
         self.assertEqual(data["user"], self.user.email)
         self.assertEqual(data["daily_fee"], "1.50")
         self.assertEqual(
-            data["expected_return_date"], self.payload["expected_return_date"],
+            data["expected_return_date"],
+            self.payload["expected_return_date"],
         )
         self.assertEqual(len(data["payments"]), 1)
         self.assertEqual(data["payments"][0]["id"], borrowing.payments.get().pk)
@@ -259,7 +288,8 @@ class BorrowingSerializerTests(TestCase):
         self.assertEqual(data["book"]["title"], self.book.title)
         self.assertEqual(data["user"]["id"], self.user.pk)
         self.assertSetEqual(
-            set(data["user"]), {"id", "email", "first_name", "last_name"},
+            set(data["user"]),
+            {"id", "email", "first_name", "last_name"},
         )
         self.assertEqual(data["payments"][0]["money_to_pay"], "4.50")
 
@@ -284,7 +314,10 @@ class BorrowingFilterSerializerTests(SimpleTestCase):
 
     def test_boolean_strings_are_converted(self):
         cases: tuple[tuple[str, bool], ...] = (
-            ("true", True), ("false", False), ("1", True), ("0", False),
+            ("true", True),
+            ("false", False),
+            ("1", True),
+            ("0", False),
         )
         for value, expected in cases:
             with self.subTest(value=value):

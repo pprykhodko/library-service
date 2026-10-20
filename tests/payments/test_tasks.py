@@ -22,8 +22,10 @@ class PaymentSyncTests(TestCase):
     @classmethod
     def setUpTestData(cls) -> None:
         cls.book = Book.objects.create(
-            title="The Hobbit", author="J. R. R. Tolkien",
-            inventory=3, daily_fee="1.50",
+            title="The Hobbit",
+            author="J. R. R. Tolkien",
+            inventory=3,
+            daily_fee="1.50",
         )
         cls.user = User.objects.create_user("reader@example.com")
 
@@ -41,28 +43,42 @@ class PaymentSyncTests(TestCase):
         self.addCleanup(network_guard.stop)
 
     def make_payment(
-        self, session_id: str | None, *, status: str = Payment.Status.PENDING,
+        self,
+        session_id: str | None,
+        *,
+        status: str = Payment.Status.PENDING,
         payment_type: str = Payment.Type.PAYMENT,
     ) -> Payment:
         borrowing = Borrowing.objects.create(
-            book=self.book, user=self.user, expected_return_date=timezone.localdate(),
+            book=self.book,
+            user=self.user,
+            expected_return_date=timezone.localdate(),
             daily_fee="1.50",
         )
         return Payment.objects.create(
-            borrowing=borrowing, money_to_pay="1.50", session_id=session_id,
-            status=status, type=payment_type,
+            borrowing=borrowing,
+            money_to_pay="1.50",
+            session_id=session_id,
+            status=status,
+            type=payment_type,
         )
 
     @staticmethod
     def session_data(
-        payment: Payment, *, status: str = "open", payment_status: str = "unpaid",
+        payment: Payment,
+        *,
+        status: str = "open",
+        payment_status: str = "unpaid",
     ) -> dict:
         return {
             "id": payment.session_id,
             "metadata": {"payment_id": str(payment.pk)},
             "client_reference_id": str(payment.checkout_key),
-            "amount_total": 150, "currency": "usd", "mode": "payment",
-            "status": status, "payment_status": payment_status,
+            "amount_total": 150,
+            "currency": "usd",
+            "mode": "payment",
+            "status": status,
+            "payment_status": payment_status,
         }
 
     def test_empty_database_requires_no_stripe_requests(self):
@@ -81,8 +97,10 @@ class PaymentSyncTests(TestCase):
         self.assertEqual(sync_payment_sessions.run(), {"checked": 1, "failed": 0})
         self.retrieve.assert_called_once_with("cs_test_pending")
         for payment, expected in (
-            (pending, Payment.Status.PENDING), (no_session, Payment.Status.PENDING),
-            (paid, Payment.Status.PAID), (expired, Payment.Status.EXPIRED),
+            (pending, Payment.Status.PENDING),
+            (no_session, Payment.Status.PENDING),
+            (paid, Payment.Status.PAID),
+            (expired, Payment.Status.EXPIRED),
         ):
             with self.subTest(payment_id=payment.pk):
                 payment.refresh_from_db()
@@ -93,7 +111,9 @@ class PaymentSyncTests(TestCase):
         fine = self.make_payment("cs_test_fine", payment_type=Payment.Type.FINE)
         sessions = {
             rental.session_id: self.session_data(
-                rental, status="complete", payment_status="paid",
+                rental,
+                status="complete",
+                payment_status="paid",
             ),
             fine.session_id: self.session_data(fine, status="expired"),
         }
@@ -123,22 +143,28 @@ class PaymentSyncTests(TestCase):
         unavailable = self.make_payment("cs_test_unavailable")
         # Payments are processed newest first; both failures precede the valid session.
         self.retrieve.side_effect = [
-            PaymentProviderUnavailable(), ValidationError("Unknown Stripe session"),
+            PaymentProviderUnavailable(),
+            ValidationError("Unknown Stripe session"),
             self.session_data(successful, status="complete", payment_status="paid"),
         ]
         with self.assertLogs("payments.tasks", level="WARNING") as logs:
             result = sync_payment_sessions.run()
 
         self.assertEqual(result, {"checked": 1, "failed": 2})
-        self.assertEqual(self.retrieve.call_args_list, [
-            call(unavailable.session_id), call(invalid.session_id),
-            call(successful.session_id),
-        ])
+        self.assertEqual(
+            self.retrieve.call_args_list,
+            [
+                call(unavailable.session_id),
+                call(invalid.session_id),
+                call(successful.session_id),
+            ],
+        )
         self.assertEqual(len(logs.output), 2)
         self.assertIn(str(unavailable.pk), logs.output[0])
         self.assertIn(str(invalid.pk), logs.output[1])
         for payment, expected in (
-            (successful, Payment.Status.PAID), (invalid, Payment.Status.PENDING),
+            (successful, Payment.Status.PAID),
+            (invalid, Payment.Status.PENDING),
             (unavailable, Payment.Status.PENDING),
         ):
             payment.refresh_from_db()
@@ -148,7 +174,9 @@ class PaymentSyncTests(TestCase):
         valid = self.make_payment("cs_test_valid")
         invalid = self.make_payment("cs_test_wrong_amount")
         wrong_session = self.session_data(
-            invalid, status="complete", payment_status="paid",
+            invalid,
+            status="complete",
+            payment_status="paid",
         )
         wrong_session["amount_total"] = 1
         self.retrieve.side_effect = [
@@ -177,7 +205,9 @@ class PaymentSyncTests(TestCase):
         self.retrieve.reset_mock()
         self.retrieve.side_effect = None
         self.retrieve.return_value = self.session_data(
-            paid_later, status="complete", payment_status="paid",
+            paid_later,
+            status="complete",
+            payment_status="paid",
         )
         self.assertEqual(sync_payment_sessions.run(), {"checked": 1, "failed": 0})
         self.retrieve.assert_called_once_with("cs_test_retry")

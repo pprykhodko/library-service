@@ -17,9 +17,20 @@ class UserAdmin(DjangoUserAdmin):
         ("Dates", {"fields": ("last_login", "date_joined")}),
     )
     add_fieldsets = (
-        (None, {"classes": ("wide",), "fields": (
-            "email", "first_name", "last_name", "password1", "password2", "role",
-        )}),
+        (
+            None,
+            {
+                "classes": ("wide",),
+                "fields": (
+                    "email",
+                    "first_name",
+                    "last_name",
+                    "password1",
+                    "password2",
+                    "role",
+                ),
+            },
+        ),
     )
     readonly_fields = ("last_login", "date_joined")
     list_display = ("email", "first_name", "last_name", "display_role", "is_active")

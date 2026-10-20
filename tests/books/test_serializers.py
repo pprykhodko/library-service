@@ -19,11 +19,13 @@ class BookSerializerTests(TestCase):
         }
 
     def test_create_trims_text_and_converts_numeric_values(self):
-        self.payload.update({
-            "title": "  The Hobbit \t",
-            "author": "\n J. R. R. Tolkien  ",
-            "inventory": "3",
-        })
+        self.payload.update(
+            {
+                "title": "  The Hobbit \t",
+                "author": "\n J. R. R. Tolkien  ",
+                "inventory": "3",
+            }
+        )
         serializer = BookSerializer(data=self.payload)
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
@@ -120,9 +122,15 @@ class BookSerializerTests(TestCase):
     def test_partial_update_preserves_omitted_fields_and_id(self):
         book = Book.objects.create(**self.payload)
         original_id = book.pk
-        serializer = BookSerializer(book, data={
-            "id": 999999, "daily_fee": "2.75", "is_active": False,
-        }, partial=True)
+        serializer = BookSerializer(
+            book,
+            data={
+                "id": 999999,
+                "daily_fee": "2.75",
+                "is_active": False,
+            },
+            partial=True,
+        )
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
         serializer.save()
@@ -149,15 +157,18 @@ class BookSerializerTests(TestCase):
         book = Book.objects.create(**self.payload)
         serializer = BookSerializer(book)
 
-        self.assertEqual(serializer.data, {
-            "id": book.pk,
-            "title": "The Hobbit",
-            "author": "J. R. R. Tolkien",
-            "cover": "HARD",
-            "inventory": 3,
-            "daily_fee": "1.50",
-            "is_active": True,
-        })
+        self.assertEqual(
+            serializer.data,
+            {
+                "id": book.pk,
+                "title": "The Hobbit",
+                "author": "J. R. R. Tolkien",
+                "cover": "HARD",
+                "inventory": 3,
+                "daily_fee": "1.50",
+                "is_active": True,
+            },
+        )
 
 
 class BookFilterSerializerTests(SimpleTestCase):
@@ -175,7 +186,10 @@ class BookFilterSerializerTests(SimpleTestCase):
 
     def test_boolean_query_values_are_converted(self):
         cases: tuple[tuple[str, bool], ...] = (
-            ("true", True), ("false", False), ("1", True), ("0", False),
+            ("true", True),
+            ("false", False),
+            ("1", True),
+            ("0", False),
         )
         for field in ("is_active", "available"):
             for raw_value, expected in cases:
@@ -195,16 +209,27 @@ class BookFilterSerializerTests(SimpleTestCase):
                     self.assertIn(field, serializer.errors)
 
     def test_combined_filters_are_preserved_and_text_is_trimmed(self):
-        serializer = BookFilterSerializer(data={
-            "title": " Hobbit ", "author": " Tolkien ", "cover": "SOFT",
-            "is_active": "true", "available": "false",
-        })
+        serializer = BookFilterSerializer(
+            data={
+                "title": " Hobbit ",
+                "author": " Tolkien ",
+                "cover": "SOFT",
+                "is_active": "true",
+                "available": "false",
+            }
+        )
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
-        self.assertEqual(serializer.validated_data, {
-            "title": "Hobbit", "author": "Tolkien", "cover": "SOFT",
-            "is_active": True, "available": False,
-        })
+        self.assertEqual(
+            serializer.validated_data,
+            {
+                "title": "Hobbit",
+                "author": "Tolkien",
+                "cover": "SOFT",
+                "is_active": True,
+                "available": False,
+            },
+        )
 
     def test_blank_text_filters_are_rejected(self):
         for field in ("title", "author"):

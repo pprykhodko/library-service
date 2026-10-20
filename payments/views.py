@@ -11,14 +11,14 @@ from payments.models import Payment
 from payments.serializers import (
     PaymentResultSerializer,
     PaymentSerializer,
-    SessionQuerySerializer
+    SessionQuerySerializer,
 )
 from payments.services import (
     PaymentProviderUnavailable,
     checkout,
     confirm_session,
     renew_checkout,
-    retrieve_session
+    retrieve_session,
 )
 from users.roles import ADMIN, CUSTOMER, EMPLOYEE, get_role
 
@@ -54,7 +54,7 @@ class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
     @extend_schema(
         request=None,
         responses=PaymentSerializer,
-        description="Owner or administrator: create or reuse a Stripe checkout link."
+        description="Owner or administrator: create or reuse a Stripe checkout link.",
     )
     @action(detail=True, methods=["post"])
     def checkout(self, request, pk=None):
@@ -72,7 +72,7 @@ class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
         request=None,
         responses=PaymentSerializer,
         description="Owner or administrator: replace an expired Stripe session. "
-                    "The payment amount and book inventory remain unchanged."
+        "The payment amount and book inventory remain unchanged.",
     )
     @action(detail=True, methods=["post"])
     def renew(self, request, pk=None):
@@ -93,21 +93,23 @@ class SuccessPaymentView(APIView):
     permission_classes = (permissions.AllowAny,)
 
     @extend_schema(
-        parameters=[SessionQuerySerializer],
-        responses=PaymentResultSerializer
+        parameters=[SessionQuerySerializer], responses=PaymentResultSerializer
     )
     def get(self, request):
         query = SessionQuerySerializer(data=request.query_params.dict())
         query.is_valid(raise_exception=True)
         payment = confirm_session(retrieve_session(query.validated_data["session_id"]))
 
-        return Response({
-            "status": payment.status,
-            "detail": (
-                "Payment confirmed." if payment.status == Payment.Status.PAID
-                else "Payment has not been confirmed by Stripe yet"
-            )
-        })
+        return Response(
+            {
+                "status": payment.status,
+                "detail": (
+                    "Payment confirmed."
+                    if payment.status == Payment.Status.PAID
+                    else "Payment has not been confirmed by Stripe yet"
+                ),
+            }
+        )
 
 
 @extend_schema(tags=["payments"])
@@ -117,13 +119,15 @@ class CancelPaymentView(APIView):
 
     @extend_schema(responses=PaymentResultSerializer)
     def get(self, request):
-        return Response({
-            "status": "cancelled",
-            "detail": (
-                "Checkout paused. Payment status is unchanged; "
-                "use the same link to resume."
-            )
-        })
+        return Response(
+            {
+                "status": "cancelled",
+                "detail": (
+                    "Checkout paused. Payment status is unchanged; "
+                    "use the same link to resume."
+                ),
+            }
+        )
 
 
 @extend_schema(tags=["payments"])
@@ -138,19 +142,18 @@ class StripeWebhookView(APIView):
 
         try:
             event = stripe.Webhook.construct_event(
-                request.body, request.headers.get("Stripe-Signature", ""),
+                request.body,
+                request.headers.get("Stripe-Signature", ""),
                 settings.STRIPE_WEBHOOK_SECRET,
             ).to_dict()
 
-        except (ValueError, stripe.SignatureVerificationError):
-            raise serializers.ValidationError(
-                "Invalid webhook signature or payload"
-            )
+        except ValueError, stripe.SignatureVerificationError:
+            raise serializers.ValidationError("Invalid webhook signature or payload")
 
         if event["type"] in (
             "checkout.session.completed",
             "checkout.session.async_payment_succeeded",
-            "checkout.session.expired"
+            "checkout.session.expired",
         ):
             session = event["data"]["object"]
 

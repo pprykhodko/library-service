@@ -5,7 +5,6 @@ from django.test import TestCase, override_settings
 
 from users.roles import ADMIN, CUSTOMER, EMPLOYEE, assign_role, get_role
 
-
 User = get_user_model()
 
 
@@ -93,8 +92,9 @@ class UserRoleTests(TestCase):
     def test_assigning_same_role_twice_is_idempotent(self):
         assign_role(self.user, EMPLOYEE)
         assign_role(self.user, EMPLOYEE)
-        self.assertEqual(list(self.user.groups.values_list("name", flat=True)),
-                         ["Employees"])
+        self.assertEqual(
+            list(self.user.groups.values_list("name", flat=True)), ["Employees"]
+        )
 
     def test_invalid_role_does_not_change_user(self):
         with self.assertRaises(ValueError):

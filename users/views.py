@@ -9,14 +9,11 @@ from users.serializers import (
     ChangePasswordSerializer,
     CustomerSerializer,
     UserSerializer,
-    ProfileSerializer
+    ProfileSerializer,
 )
 
 
-@extend_schema(
-    tags=["users"],
-    summary="Register a customer"
-)
+@extend_schema(tags=["users"], summary="Register a customer")
 class CreateUserView(generics.CreateAPIView):
     serializer_class = UserSerializer
     permission_classes = (AllowAny,)
@@ -24,9 +21,7 @@ class CreateUserView(generics.CreateAPIView):
 
 @extend_schema_view(
     get=extend_schema(
-        tags=["users"],
-        summary="Read your profile",
-        responses=ProfileSerializer
+        tags=["users"], summary="Read your profile", responses=ProfileSerializer
     ),
     put=extend_schema(
         tags=["users"],
@@ -36,7 +31,7 @@ class CreateUserView(generics.CreateAPIView):
             "All roles must change passwords through /users/me/password/."
         ),
         request=ProfileSerializer,
-        responses=ProfileSerializer
+        responses=ProfileSerializer,
     ),
     patch=extend_schema(
         tags=["users"],
@@ -46,8 +41,8 @@ class CreateUserView(generics.CreateAPIView):
             "All roles must change passwords through /users/me/password/."
         ),
         request=ProfileSerializer,
-        responses=ProfileSerializer
-    )
+        responses=ProfileSerializer,
+    ),
 )
 class ManageUserView(generics.RetrieveUpdateAPIView):
     serializer_class = ProfileSerializer
@@ -67,7 +62,7 @@ class ChangePasswordView(generics.GenericAPIView):
         description=(
             "Requires the current password. Available to all authenticated roles."
         ),
-        responses={204: None}
+        responses={204: None},
     )
     def post(self, request):
         serializer = self.get_serializer(data=request.data)
@@ -84,7 +79,7 @@ class ChangePasswordView(generics.GenericAPIView):
     description=(
         "Employees may read customers only; administrators may read any user. "
         "Read-only endpoint."
-    )
+    ),
 )
 class CustomerDetailView(generics.RetrieveAPIView):
     serializer_class = CustomerSerializer
@@ -99,7 +94,6 @@ class CustomerDetailView(generics.RetrieveAPIView):
         if self.request.user.is_superuser:
             return users
 
-        return (
-            users.filter(groups__name="Customers", is_superuser=False)
-            .exclude(groups__name="Employees")
+        return users.filter(groups__name="Customers", is_superuser=False).exclude(
+            groups__name="Employees"
         )

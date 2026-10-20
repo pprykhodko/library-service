@@ -15,12 +15,14 @@ class ProtectBookDeletionMixin:
             instance.delete()
 
         except ProtectedError:
-            raise serializers.ValidationError({
-                "detail": (
-                    "This book has protected related records and cannot be "
-                    "deleted. Set is_active=false to withdraw it from lending."
-                )
-            })
+            raise serializers.ValidationError(
+                {
+                    "detail": (
+                        "This book has protected related records and cannot be "
+                        "deleted. Set is_active=false to withdraw it from lending."
+                    )
+                }
+            )
 
 
 @extend_schema_view(
@@ -31,31 +33,29 @@ class ProtectBookDeletionMixin:
             "books, including books with zero inventory. Employees and "
             "administrators may also see inactive books."
         ),
-        parameters=[BookFilterSerializer]
+        parameters=[BookFilterSerializer],
     ),
     retrieve=extend_schema(summary="Read a book"),
     create=extend_schema(
-        summary="Add a book",
-        description="Employees and administrators only"
+        summary="Add a book", description="Employees and administrators only"
     ),
     update=extend_schema(
-        summary="Update a book",
-        description="Employees and administrators only"
+        summary="Update a book", description="Employees and administrators only"
     ),
     partial_update=extend_schema(
         summary="Partially update a book",
         description=(
             "Employees and administrators only. Set is_active=false to "
             "withdraw a book from lending without deleting it."
-        )
+        ),
     ),
     destroy=extend_schema(
         summary="Delete a book",
         description=(
             "Employees and administrators only. Protected related records "
             "prevent deletion; withdraw the book with is_active=false instead."
-        )
-    )
+        ),
+    ),
 )
 class BookViewSet(ProtectBookDeletionMixin, viewsets.ModelViewSet):
     queryset = Book.objects.all().order_by("title", "id")

@@ -5,7 +5,6 @@ from rest_framework.test import APIClient, APITestCase
 from users.models import User
 from users.roles import ADMIN, CUSTOMER, EMPLOYEE, assign_role, get_role
 
-
 PASSWORD = "N7!StrongLibraryPassword"
 NEW_PASSWORD = "Different!Secret2026"
 PROFILE_URL = reverse("users:manage")
@@ -40,9 +39,14 @@ class ProfileTests(APITestCase):
         for user in (self.customer, self.admin):
             with self.subTest(role=get_role(user)):
                 self.client.force_authenticate(user)
-                response = self.client.patch(PROFILE_URL, {
-                    "first_name": "Updated", "email": f" NEW{user.pk}@EXAMPLE.COM ",
-                }, format="json")
+                response = self.client.patch(
+                    PROFILE_URL,
+                    {
+                        "first_name": "Updated",
+                        "email": f" NEW{user.pk}@EXAMPLE.COM ",
+                    },
+                    format="json",
+                )
                 self.assertEqual(response.status_code, 200, response.data)
                 user.refresh_from_db()
                 self.assertEqual(user.first_name, "Updated")
@@ -51,9 +55,15 @@ class ProfileTests(APITestCase):
 
     def test_customer_can_replace_profile_with_put(self):
         self.client.force_authenticate(self.customer)
-        response = self.client.put(PROFILE_URL, {
-            "email": self.customer.email, "first_name": "Anna", "last_name": "Reader",
-        }, format="json")
+        response = self.client.put(
+            PROFILE_URL,
+            {
+                "email": self.customer.email,
+                "first_name": "Anna",
+                "last_name": "Reader",
+            },
+            format="json",
+        )
         self.assertEqual(response.status_code, 200, response.data)
         self.customer.refresh_from_db()
         self.assertEqual(self.customer.last_name, "Reader")
@@ -62,9 +72,14 @@ class ProfileTests(APITestCase):
         self.client.force_authenticate(self.employee)
         for method in (self.client.patch, self.client.put):
             with self.subTest(method=method.__name__):
-                response = method(PROFILE_URL, {
-                    "email": "changed@example.com", "first_name": "Changed",
-                }, format="json")
+                response = method(
+                    PROFILE_URL,
+                    {
+                        "email": "changed@example.com",
+                        "first_name": "Changed",
+                    },
+                    format="json",
+                )
                 self.assertEqual(response.status_code, 403)
         self.employee.refresh_from_db()
         self.assertEqual(self.employee.email, "employee@example.com")
@@ -72,11 +87,19 @@ class ProfileTests(APITestCase):
 
     def test_customer_cannot_change_privileges_or_other_user(self):
         self.client.force_authenticate(self.customer)
-        response = self.client.patch(PROFILE_URL, {
-            "id": self.employee.pk, "role": ADMIN, "is_staff": True,
-            "is_superuser": True, "groups": [], "is_active": False,
-            "first_name": "Own profile",
-        }, format="json")
+        response = self.client.patch(
+            PROFILE_URL,
+            {
+                "id": self.employee.pk,
+                "role": ADMIN,
+                "is_staff": True,
+                "is_superuser": True,
+                "groups": [],
+                "is_active": False,
+                "first_name": "Own profile",
+            },
+            format="json",
+        )
         self.assertEqual(response.status_code, 200)
         self.customer.refresh_from_db()
         self.employee.refresh_from_db()
@@ -89,29 +112,44 @@ class ProfileTests(APITestCase):
 
     def test_email_update_checks_uniqueness_but_allows_own_email(self):
         self.client.force_authenticate(self.customer)
-        response = self.client.patch(PROFILE_URL, {
-            "email": " EMPLOYEE@EXAMPLE.COM ",
-        }, format="json")
+        response = self.client.patch(
+            PROFILE_URL,
+            {
+                "email": " EMPLOYEE@EXAMPLE.COM ",
+            },
+            format="json",
+        )
         self.assertEqual(response.status_code, 400)
         self.assertIn("email", response.data)
         self.customer.refresh_from_db()
         self.assertEqual(self.customer.email, "customer@example.com")
-        response = self.client.patch(PROFILE_URL, {
-            "email": " CUSTOMER@EXAMPLE.COM ",
-        }, format="json")
+        response = self.client.patch(
+            PROFILE_URL,
+            {
+                "email": " CUSTOMER@EXAMPLE.COM ",
+            },
+            format="json",
+        )
         self.assertEqual(response.status_code, 200)
 
     def test_password_cannot_be_changed_through_profile_by_any_role(self):
         cases: tuple[tuple[User, int], ...] = (
-            (self.customer, 400), (self.employee, 403), (self.admin, 400),
+            (self.customer, 400),
+            (self.employee, 403),
+            (self.admin, 400),
         )
         for user, expected in cases:
             for method in (self.client.patch, self.client.put):
                 with self.subTest(role=get_role(user), method=method.__name__):
                     self.client.force_authenticate(user)
-                    response = method(PROFILE_URL, {
-                        "email": user.email, "password": NEW_PASSWORD,
-                    }, format="json")
+                    response = method(
+                        PROFILE_URL,
+                        {
+                            "email": user.email,
+                            "password": NEW_PASSWORD,
+                        },
+                        format="json",
+                    )
                     self.assertEqual(response.status_code, expected)
                     user.refresh_from_db()
                     self.assertTrue(user.check_password(PASSWORD))
@@ -150,9 +188,15 @@ class ProfileTests(APITestCase):
                     self.assertEqual(response.status_code, expected)
                     if expected == 200:
                         self.assertEqual(response.data["id"], target.pk)
-                        self.assertSetEqual(set(response.data), {
-                            "id", "email", "first_name", "last_name",
-                        })
+                        self.assertSetEqual(
+                            set(response.data),
+                            {
+                                "id",
+                                "email",
+                                "first_name",
+                                "last_name",
+                            },
+                        )
 
     def test_employee_cannot_read_mixed_role_account_as_customer(self):
         self.customer.groups.add(self.employee.groups.get(name="Employees"))
@@ -190,9 +234,14 @@ class PasswordChangeTests(APITestCase):
         for role in (CUSTOMER, EMPLOYEE, ADMIN):
             with self.subTest(role=role):
                 assign_role(self.user, role)
-                response = self.client.post(PASSWORD_URL, {
-                    "old_password": PASSWORD, "new_password": NEW_PASSWORD,
-                }, format="json")
+                response = self.client.post(
+                    PASSWORD_URL,
+                    {
+                        "old_password": PASSWORD,
+                        "new_password": NEW_PASSWORD,
+                    },
+                    format="json",
+                )
                 self.assertEqual(response.status_code, 204, response.data)
                 self.user.refresh_from_db()
                 self.assertTrue(self.user.check_password(NEW_PASSWORD))
@@ -219,33 +268,53 @@ class PasswordChangeTests(APITestCase):
                 self.assertTrue(self.user.check_password(PASSWORD))
 
     def test_password_change_updates_login_credentials(self):
-        response = self.client.post(PASSWORD_URL, {
-            "old_password": PASSWORD, "new_password": NEW_PASSWORD,
-        }, format="json")
+        response = self.client.post(
+            PASSWORD_URL,
+            {
+                "old_password": PASSWORD,
+                "new_password": NEW_PASSWORD,
+            },
+            format="json",
+        )
         self.assertEqual(response.status_code, 204)
         self.client.force_authenticate(user=None)
         cases: tuple[tuple[str, int], ...] = ((PASSWORD, 401), (NEW_PASSWORD, 200))
         for password, expected in cases:
             with self.subTest(expected=expected):
-                response = self.client.post(reverse("users:token-obtain"), {
-                    "email": self.user.email, "password": password,
-                }, format="json")
+                response = self.client.post(
+                    reverse("users:token-obtain"),
+                    {
+                        "email": self.user.email,
+                        "password": password,
+                    },
+                    format="json",
+                )
                 self.assertEqual(response.status_code, expected)
 
     def test_password_change_preserves_browser_session(self):
         self.client.force_authenticate(user=None)
         self.assertTrue(self.client.login(email=self.user.email, password=PASSWORD))
-        response = self.client.post(PASSWORD_URL, {
-            "old_password": PASSWORD, "new_password": NEW_PASSWORD,
-        }, format="json")
+        response = self.client.post(
+            PASSWORD_URL,
+            {
+                "old_password": PASSWORD,
+                "new_password": NEW_PASSWORD,
+            },
+            format="json",
+        )
         self.assertEqual(response.status_code, 204, response.data)
         self.assertEqual(self.client.get(PROFILE_URL).status_code, 200)
 
     def test_password_change_preserves_whitespace(self):
         new_password = f" {NEW_PASSWORD} "
-        response = self.client.post(PASSWORD_URL, {
-            "old_password": PASSWORD, "new_password": new_password,
-        }, format="json")
+        response = self.client.post(
+            PASSWORD_URL,
+            {
+                "old_password": PASSWORD,
+                "new_password": new_password,
+            },
+            format="json",
+        )
         self.assertEqual(response.status_code, 204)
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password(new_password))

@@ -24,7 +24,7 @@ def stripe_client():
     return stripe.StripeClient(
         settings.STRIPE_SECRET_KEY,
         http_client=stripe.RequestsClient(timeout=10),
-        max_network_retries=1
+        max_network_retries=1,
     )
 
 
@@ -36,16 +36,18 @@ def create_rental_payment(borrowing):
         raise ValidationError({"expected_return_date": "Rental amount is too large"})
 
     if Decimal("0") < amount < Decimal("0.50"):
-        raise ValidationError({
-            "expected_return_date": (
-                "The rental total must be zero or at least 0.50 USD"
-            )
-        })
+        raise ValidationError(
+            {
+                "expected_return_date": (
+                    "The rental total must be zero or at least 0.50 USD"
+                )
+            }
+        )
 
     return Payment.objects.create(
         borrowing=borrowing,
         money_to_pay=amount,
-        status=Payment.Status.PAID if amount == 0 else Payment.Status.PENDING
+        status=Payment.Status.PAID if amount == 0 else Payment.Status.PENDING,
     )
 
 
@@ -59,10 +61,14 @@ def create_return_fine(borrowing, return_date):
         return None
 
     if borrowing.daily_fee is None:
-        raise ValidationError({
-            "daily_fee": "Restore this legacy borrowing's original daily fee before "
-                         "returning it. The historical rate is unknown."
-        })
+        raise ValidationError(
+            {
+                "daily_fee": (
+                    "Restore this legacy borrowing's original daily fee "
+                    "before returning it. The historical rate is unknown."
+                )
+            }
+        )
 
     amount = borrowing.daily_fee * days * Decimal("2")
 
@@ -75,7 +81,9 @@ def create_return_fine(borrowing, return_date):
         raise ValidationError("The fine exceeds Stripe's maximum payment amount")
 
     return Payment.objects.create(
-        borrowing=borrowing, type=Payment.Type.FINE, money_to_pay=amount,
+        borrowing=borrowing,
+        type=Payment.Type.FINE,
+        money_to_pay=amount,
     )
 
 
@@ -102,8 +110,11 @@ def confirm_session(session):
             or session.get("amount_total") != int(payment.money_to_pay * 100)
             or session.get("currency") != "usd"
             or session.get("mode") != "payment"
-            or (not historical and payment.session_id
-                and payment.session_id != session.get("id"))
+            or (
+                not historical
+                and payment.session_id
+                and payment.session_id != session.get("id")
+            )
         ):
             raise ValidationError("Stripe session does not match the payment.")
 
@@ -172,24 +183,27 @@ def checkout(payment):
                 "client_reference_id": str(payment.checkout_key),
                 "metadata": {"payment_id": str(payment.pk)},
                 "success_url": (
-                    base + reverse("payments:success")
+                    base
+                    + reverse("payments:success")
                     + "?session_id={CHECKOUT_SESSION_ID}"
                 ),
                 "cancel_url": base + reverse("payments:cancel"),
-                "line_items": [{
-                    "price_data": {
-                        "currency": "usd",
-                        "unit_amount": int(payment.money_to_pay * 100),
-                        "product_data": {
-                            "name": (
-                                f"Library rental payment #{payment.pk}"
-                                if payment.type == Payment.Type.PAYMENT
-                                else f"Library overdue fine #{payment.pk}"
-                            )
+                "line_items": [
+                    {
+                        "price_data": {
+                            "currency": "usd",
+                            "unit_amount": int(payment.money_to_pay * 100),
+                            "product_data": {
+                                "name": (
+                                    f"Library rental payment #{payment.pk}"
+                                    if payment.type == Payment.Type.PAYMENT
+                                    else f"Library overdue fine #{payment.pk}"
+                                )
+                            },
                         },
-                    },
-                    "quantity": 1,
-                }],
+                        "quantity": 1,
+                    }
+                ],
             },
             options={"idempotency_key": str(payment.checkout_key)},
         )
@@ -224,20 +238,16 @@ def renew_checkout(payment):
 
     with transaction.atomic():
         updated = Payment.objects.filter(
-            pk=payment.pk,
-            checkout_key=previous_key,
-            status=Payment.Status.EXPIRED
+            pk=payment.pk, checkout_key=previous_key, status=Payment.Status.EXPIRED
         ).update(
             checkout_key=uuid.uuid4(),
             session_id=None,
             session_url="",
-            status=Payment.Status.PENDING
+            status=Payment.Status.PENDING,
         )
         if updated:
             ExpiredCheckoutSession.objects.create(
-                payment=payment,
-                session_id=session["id"],
-                checkout_key=previous_key
+                payment=payment, session_id=session["id"], checkout_key=previous_key
             )
 
     return checkout(payment)

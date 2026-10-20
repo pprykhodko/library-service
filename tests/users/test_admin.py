@@ -5,7 +5,6 @@ from django.urls import reverse
 from users.forms import AdminUserChangeForm, AdminUserCreationForm
 from users.roles import ADMIN, CUSTOMER, EMPLOYEE, assign_role, get_role
 
-
 User = get_user_model()
 PASSWORD = "N7!StrongLibraryPassword"
 
@@ -18,14 +17,19 @@ class AdminFormTests(TestCase):
     def test_change_form_initial_role_matches_user(self):
         user = User.objects.create_user("reader@example.com", PASSWORD)
         assign_role(user, EMPLOYEE)
-        self.assertEqual(AdminUserChangeForm(instance=user).fields["role"].initial,
-                         EMPLOYEE)
+        self.assertEqual(
+            AdminUserChangeForm(instance=user).fields["role"].initial, EMPLOYEE
+        )
 
     def test_creation_form_normalizes_email_and_hashes_password(self):
-        form = AdminUserCreationForm(data={
-            "email": " NEW@EXAMPLE.COM ", "role": CUSTOMER,
-            "password1": PASSWORD, "password2": PASSWORD,
-        })
+        form = AdminUserCreationForm(
+            data={
+                "email": " NEW@EXAMPLE.COM ",
+                "role": CUSTOMER,
+                "password1": PASSWORD,
+                "password2": PASSWORD,
+            }
+        )
         self.assertTrue(form.is_valid(), form.errors)
         user = form.save()
         self.assertEqual(user.email, "new@example.com")
@@ -40,8 +44,10 @@ class AdminFormTests(TestCase):
         ):
             with self.subTest(field=field):
                 data = {
-                    "email": "new@example.com", "role": CUSTOMER,
-                    "password1": PASSWORD, "password2": PASSWORD,
+                    "email": "new@example.com",
+                    "role": CUSTOMER,
+                    "password1": PASSWORD,
+                    "password2": PASSWORD,
                 }
                 data.update(overrides)
                 form = AdminUserCreationForm(data=data)
@@ -60,8 +66,9 @@ class UserAdminTests(TestCase):
 
     def test_superuser_can_list_search_and_view_users(self):
         self.client.force_login(self.admin)
-        response = self.client.get(reverse("admin:users_user_changelist"),
-                                   {"q": "customer@example.com"})
+        response = self.client.get(
+            reverse("admin:users_user_changelist"), {"q": "customer@example.com"}
+        )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "customer@example.com")
         self.assertEqual(list(response.context["cl"].result_list), [self.customer])
@@ -72,11 +79,18 @@ class UserAdminTests(TestCase):
         self.client.force_login(self.admin)
         for role in (CUSTOMER, EMPLOYEE, ADMIN):
             with self.subTest(role=role):
-                response = self.client.post(reverse("admin:users_user_add"), {
-                    "email": f"new-{role}@example.com", "role": role,
-                    "password1": PASSWORD, "password2": PASSWORD,
-                    "first_name": "New", "last_name": "Account", "_save": "Save",
-                })
+                response = self.client.post(
+                    reverse("admin:users_user_add"),
+                    {
+                        "email": f"new-{role}@example.com",
+                        "role": role,
+                        "password1": PASSWORD,
+                        "password2": PASSWORD,
+                        "first_name": "New",
+                        "last_name": "Account",
+                        "_save": "Save",
+                    },
+                )
                 self.assertEqual(response.status_code, 302)
                 user = User.objects.get(email=f"new-{role}@example.com")
                 self.assertEqual(get_role(user), role)
@@ -87,9 +101,13 @@ class UserAdminTests(TestCase):
     def test_admin_can_change_role_and_keep_own_email(self):
         self.client.force_login(self.admin)
         response = self.client.post(
-            reverse("admin:users_user_change", args=[self.customer.pk]), {
-                "email": " CUSTOMER@EXAMPLE.COM ", "role": EMPLOYEE,
-                "first_name": "Updated", "last_name": "Reader", "is_active": "on",
+            reverse("admin:users_user_change", args=[self.customer.pk]),
+            {
+                "email": " CUSTOMER@EXAMPLE.COM ",
+                "role": EMPLOYEE,
+                "first_name": "Updated",
+                "last_name": "Reader",
+                "is_active": "on",
                 "_save": "Save",
             },
         )
@@ -102,9 +120,12 @@ class UserAdminTests(TestCase):
     def test_admin_cannot_change_email_to_an_existing_account(self):
         self.client.force_login(self.admin)
         response = self.client.post(
-            reverse("admin:users_user_change", args=[self.customer.pk]), {
-                "email": " EMPLOYEE@EXAMPLE.COM ", "role": CUSTOMER,
-                "is_active": "on", "_save": "Save",
+            reverse("admin:users_user_change", args=[self.customer.pk]),
+            {
+                "email": " EMPLOYEE@EXAMPLE.COM ",
+                "role": CUSTOMER,
+                "is_active": "on",
+                "_save": "Save",
             },
         )
         self.assertEqual(response.status_code, 200)

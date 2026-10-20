@@ -2,7 +2,7 @@ from django.urls import path
 from rest_framework_simplejwt.views import (
     TokenRefreshView,
     TokenVerifyView,
-    TokenObtainPairView
+    TokenObtainPairView,
 )
 
 from users.views import (
@@ -11,7 +11,6 @@ from users.views import (
     ChangePasswordView,
     CustomerDetailView,
 )
-
 
 urlpatterns = [
     path("", CreateUserView.as_view(), name="register"),

@@ -27,6 +27,7 @@ class UserManager(BaseUserManager):
             user.save(using=self._db)
             if not user.is_superuser:
                 from users.roles import CUSTOMER, assign_role
+
                 assign_role(user, CUSTOMER)
 
         return user
@@ -56,7 +57,7 @@ class User(AbstractUser):
     username = None
     email = models.EmailField(unique=True)
 
-    USERNAME_FIELD = 'email'
+    USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []
 
     objects = UserManager()

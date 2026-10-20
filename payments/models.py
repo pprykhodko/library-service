@@ -16,9 +16,7 @@ class Payment(models.Model):
         FINE = "FINE", "Fine"
 
     borrowing = models.ForeignKey(
-        "borrowings.Borrowing",
-        on_delete=models.PROTECT,
-        related_name="payments"
+        "borrowings.Borrowing", on_delete=models.PROTECT, related_name="payments"
     )
     status = models.CharField(max_length=7, choices=Status, default=Status.PENDING)
     type = models.CharField(max_length=7, choices=Type, default=Type.PAYMENT)
@@ -26,7 +24,9 @@ class Payment(models.Model):
     session_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
     checkout_key = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     money_to_pay = models.DecimalField(
-        max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal("0"))],
+        max_digits=12,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0"))],
     )
 
     class Meta:
@@ -45,11 +45,13 @@ class Payment(models.Model):
                 name="payment_type_valid",
             ),
             models.UniqueConstraint(
-                fields=["borrowing"], condition=models.Q(type="PAYMENT"),
+                fields=["borrowing"],
+                condition=models.Q(type="PAYMENT"),
                 name="one_rental_payment_per_borrowing",
             ),
             models.UniqueConstraint(
-                fields=["borrowing"], condition=models.Q(type="FINE"),
+                fields=["borrowing"],
+                condition=models.Q(type="FINE"),
                 name="one_fine_per_borrowing",
             ),
         ]
@@ -60,8 +62,7 @@ class Payment(models.Model):
 
 class ExpiredCheckoutSession(models.Model):
     payment = models.ForeignKey(
-        Payment, on_delete=models.PROTECT,
-        related_name="expired_sessions"
+        Payment, on_delete=models.PROTECT, related_name="expired_sessions"
     )
     session_id = models.CharField(max_length=255, unique=True)
     checkout_key = models.UUIDField(unique=True)

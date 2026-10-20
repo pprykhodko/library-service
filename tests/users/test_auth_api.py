@@ -9,7 +9,6 @@ from rest_framework_simplejwt.tokens import AccessToken
 
 from users.roles import CUSTOMER, get_role
 
-
 User = get_user_model()
 PASSWORD = "N7!StrongLibraryPassword"
 REGISTER_URL = reverse("users:register")
@@ -20,10 +19,16 @@ PROFILE_URL = reverse("users:manage")
 @override_settings(PASSWORD_HASHERS=["django.contrib.auth.hashers.MD5PasswordHasher"])
 class RegistrationTests(APITestCase):
     def test_registration_creates_customer_and_never_returns_password(self):
-        response = self.client.post(REGISTER_URL, {
-            "email": " Reader@EXAMPLE.COM ", "password": PASSWORD,
-            "first_name": "Anna", "last_name": "Reader",
-        }, format="json")
+        response = self.client.post(
+            REGISTER_URL,
+            {
+                "email": " Reader@EXAMPLE.COM ",
+                "password": PASSWORD,
+                "first_name": "Anna",
+                "last_name": "Reader",
+            },
+            format="json",
+        )
 
         self.assertEqual(response.status_code, 201, response.data)
         user = User.objects.get(pk=response.data["id"])
@@ -35,11 +40,19 @@ class RegistrationTests(APITestCase):
         self.assertNotIn("password", response.data)
 
     def test_registration_cannot_escalate_privileges(self):
-        response = self.client.post(REGISTER_URL, {
-            "email": "reader@example.com", "password": PASSWORD,
-            "role": "admin", "is_staff": True, "is_superuser": True,
-            "groups": [1], "user_permissions": [1],
-        }, format="json")
+        response = self.client.post(
+            REGISTER_URL,
+            {
+                "email": "reader@example.com",
+                "password": PASSWORD,
+                "role": "admin",
+                "is_staff": True,
+                "is_superuser": True,
+                "groups": [1],
+                "user_permissions": [1],
+            },
+            format="json",
+        )
 
         self.assertEqual(response.status_code, 201, response.data)
         user = User.objects.get(pk=response.data["id"])
@@ -51,12 +64,19 @@ class RegistrationTests(APITestCase):
     def test_duplicate_email_is_rejected_regardless_of_case(self):
         User.objects.create_user("reader@example.com", PASSWORD)
         for email in (
-            "reader@example.com", "READER@EXAMPLE.COM", " Reader@example.com ",
+            "reader@example.com",
+            "READER@EXAMPLE.COM",
+            " Reader@example.com ",
         ):
             with self.subTest(email=email):
-                response = self.client.post(REGISTER_URL, {
-                    "email": email, "password": PASSWORD,
-                }, format="json")
+                response = self.client.post(
+                    REGISTER_URL,
+                    {
+                        "email": email,
+                        "password": PASSWORD,
+                    },
+                    format="json",
+                )
                 self.assertEqual(response.status_code, 400)
                 self.assertIn("email", response.data)
         self.assertEqual(User.objects.count(), 1)
@@ -79,17 +99,27 @@ class RegistrationTests(APITestCase):
     def test_weak_passwords_are_rejected(self):
         for password in ("Ab1!", "123456789012", "password", "reader@example.com"):
             with self.subTest(password=password):
-                response = self.client.post(REGISTER_URL, {
-                    "email": "reader@example.com", "password": password,
-                }, format="json")
+                response = self.client.post(
+                    REGISTER_URL,
+                    {
+                        "email": "reader@example.com",
+                        "password": password,
+                    },
+                    format="json",
+                )
                 self.assertEqual(response.status_code, 400, response.data)
         self.assertFalse(User.objects.exists())
 
     def test_password_whitespace_is_preserved(self):
         password = f" {PASSWORD} "
-        response = self.client.post(REGISTER_URL, {
-            "email": "reader@example.com", "password": password,
-        }, format="json")
+        response = self.client.post(
+            REGISTER_URL,
+            {
+                "email": "reader@example.com",
+                "password": password,
+            },
+            format="json",
+        )
         self.assertEqual(response.status_code, 201, response.data)
         user = User.objects.get(pk=response.data["id"])
         self.assertTrue(user.check_password(password))
@@ -102,16 +132,26 @@ class JwtTests(APITestCase):
         self.user = User.objects.create_user("reader@example.com", PASSWORD)
 
     def obtain_tokens(self):
-        response = self.client.post(TOKEN_URL, {
-            "email": "reader@example.com", "password": PASSWORD,
-        }, format="json")
+        response = self.client.post(
+            TOKEN_URL,
+            {
+                "email": "reader@example.com",
+                "password": PASSWORD,
+            },
+            format="json",
+        )
         self.assertEqual(response.status_code, 200, response.data)
         return response.data
 
     def test_login_accepts_normalized_email_and_access_authenticates(self):
-        response = self.client.post(TOKEN_URL, {
-            "email": " READER@EXAMPLE.COM ", "password": PASSWORD,
-        }, format="json")
+        response = self.client.post(
+            TOKEN_URL,
+            {
+                "email": " READER@EXAMPLE.COM ",
+                "password": PASSWORD,
+            },
+            format="json",
+        )
         self.assertEqual(response.status_code, 200, response.data)
         self.assertIn("refresh", response.data)
         token = AccessToken(response.data["access"])
@@ -124,48 +164,72 @@ class JwtTests(APITestCase):
 
     def test_wrong_credentials_and_inactive_user_cannot_login(self):
         for email, password in (
-            (self.user.email, "wrong-password"), ("missing@example.com", PASSWORD),
+            (self.user.email, "wrong-password"),
+            ("missing@example.com", PASSWORD),
         ):
             with self.subTest(email=email):
-                response = self.client.post(TOKEN_URL, {
-                    "email": email, "password": password,
-                }, format="json")
+                response = self.client.post(
+                    TOKEN_URL,
+                    {
+                        "email": email,
+                        "password": password,
+                    },
+                    format="json",
+                )
                 self.assertEqual(response.status_code, 401)
         self.user.is_active = False
         self.user.save()
-        response = self.client.post(TOKEN_URL, {
-            "email": self.user.email, "password": PASSWORD,
-        }, format="json")
+        response = self.client.post(
+            TOKEN_URL,
+            {
+                "email": self.user.email,
+                "password": PASSWORD,
+            },
+            format="json",
+        )
         self.assertEqual(response.status_code, 401)
 
     def test_refresh_produces_usable_access_token(self):
         tokens = self.obtain_tokens()
-        response = self.client.post(reverse("users:token-refresh"), {
-            "refresh": tokens["refresh"],
-        }, format="json")
+        response = self.client.post(
+            reverse("users:token-refresh"),
+            {
+                "refresh": tokens["refresh"],
+            },
+            format="json",
+        )
         self.assertEqual(response.status_code, 200, response.data)
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {response.data['access']}")
         self.assertEqual(self.client.get(PROFILE_URL).status_code, 200)
 
     def test_access_token_cannot_be_used_as_refresh(self):
-        response = self.client.post(reverse("users:token-refresh"), {
-            "refresh": self.obtain_tokens()["access"],
-        }, format="json")
+        response = self.client.post(
+            reverse("users:token-refresh"),
+            {
+                "refresh": self.obtain_tokens()["access"],
+            },
+            format="json",
+        )
         self.assertEqual(response.status_code, 401)
 
     def test_verify_accepts_valid_token_and_rejects_malformed_token(self):
         access = self.obtain_tokens()["access"]
         for token, expected in ((access, 200), ("not-a-jwt", 401)):
             with self.subTest(expected=expected):
-                response = self.client.post(reverse("users:token-verify"), {
-                    "token": token,
-                }, format="json")
+                response = self.client.post(
+                    reverse("users:token-verify"),
+                    {
+                        "token": token,
+                    },
+                    format="json",
+                )
                 self.assertEqual(response.status_code, expected)
 
     def test_missing_invalid_expired_and_refresh_tokens_cannot_access_profile(self):
         expired = AccessToken.for_user(self.user)
-        expired.set_exp(from_time=timezone.now() - timedelta(hours=2),
-                        lifetime=timedelta(seconds=1))
+        expired.set_exp(
+            from_time=timezone.now() - timedelta(hours=2), lifetime=timedelta(seconds=1)
+        )
         refresh = self.obtain_tokens()["refresh"]
         for token in (None, "not-a-jwt", str(expired), refresh):
             with self.subTest(token_type=token and token[:12]):

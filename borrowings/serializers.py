@@ -28,7 +28,12 @@ class BorrowingSerializer(serializers.ModelSerializer):
             "payments",
         )
         read_only_fields = (
-            "id", "user", "borrow_date", "actual_return_date", "daily_fee", "payments",
+            "id",
+            "user",
+            "borrow_date",
+            "actual_return_date",
+            "daily_fee",
+            "payments",
         )
 
     def validate_expected_return_date(self, value):
@@ -50,32 +55,32 @@ class BorrowingSerializer(serializers.ModelSerializer):
         today = timezone.localdate()
 
         if validated_data["expected_return_date"] < today:
-            raise serializers.ValidationError({
-                "expected_return_date": "Return date cannot be in the past"
-            })
+            raise serializers.ValidationError(
+                {"expected_return_date": "Return date cannot be in the past"}
+            )
 
         with transaction.atomic():
             lock_borrower(validated_data["user"].pk)
 
             if Payment.objects.filter(
                 borrowing__user=validated_data["user"],
-                status__in=[Payment.Status.PENDING, Payment.Status.EXPIRED]
+                status__in=[Payment.Status.PENDING, Payment.Status.EXPIRED],
             ).exists():
-                raise serializers.ValidationError({
-                    "detail": "Pay all outstanding rental payments and fines "
-                              "before borrowing another book."
-                })
+                raise serializers.ValidationError(
+                    {
+                        "detail": "Pay all outstanding rental payments and fines "
+                        "before borrowing another book."
+                    }
+                )
 
             updated = Book.objects.filter(
-                pk=validated_data["book"].pk,
-                is_active=True,
-                inventory__gt=0
+                pk=validated_data["book"].pk, is_active=True, inventory__gt=0
             ).update(inventory=F("inventory") - 1)
 
             if not updated:
-                raise serializers.ValidationError({
-                    "book": "This book is inactive or has no available copies"
-                })
+                raise serializers.ValidationError(
+                    {"book": "This book is inactive or has no available copies"}
+                )
 
             book = Book.objects.get(pk=validated_data["book"].pk)
             borrowing = Borrowing.objects.create(
@@ -100,11 +105,10 @@ class BorrowingFilterSerializer(serializers.Serializer):
     user_id = serializers.IntegerField(
         required=False,
         min_value=1,
-        help_text="Filter by user ID. Customers can only see their own records."
+        help_text="Filter by user ID. Customers can only see their own records.",
     )
     is_active = serializers.BooleanField(
-        required=False,
-        help_text="True for books not yet returned"
+        required=False, help_text="True for books not yet returned"
     )
 
 

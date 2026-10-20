@@ -19,22 +19,14 @@ class UserSerializer(serializers.ModelSerializer):
             "first_name",
             "last_name",
             "is_staff",
-            "role"
+            "role",
         )
         read_only_fields = ("id", "is_staff", "role")
         extra_kwargs = {
-            "password": {
-                "write_only": True,
-                "min_length": 8,
-                "trim_whitespace": False
-            }
+            "password": {"write_only": True, "min_length": 8, "trim_whitespace": False}
         }
 
-    @extend_schema_field(
-        serializers.ChoiceField(
-            choices=ROLE_CHOICES,
-            allow_null=True)
-    )
+    @extend_schema_field(serializers.ChoiceField(choices=ROLE_CHOICES, allow_null=True))
     def get_role(self, obj):
         return get_role(obj)
 
@@ -52,10 +44,12 @@ class UserSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         if "password" in attrs:
-            candidate = get_user_model()(**{
-                name: attrs.get(name, getattr(self.instance, name, ""))
-                for name in ("email", "first_name", "last_name")
-            })
+            candidate = get_user_model()(
+                **{
+                    name: attrs.get(name, getattr(self.instance, name, ""))
+                    for name in ("email", "first_name", "last_name")
+                }
+            )
             password_validation.validate_password(attrs["password"], candidate)
 
         return attrs
@@ -85,9 +79,9 @@ class ProfileSerializer(UserSerializer):
 
     def validate(self, attrs):
         if "password" in self.initial_data:
-            raise serializers.ValidationError({
-                "password": "Use /users/me/password/ with your current password."
-            })
+            raise serializers.ValidationError(
+                {"password": "Use /users/me/password/ with your current password."}
+            )
 
         return super().validate(attrs)
 

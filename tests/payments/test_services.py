@@ -33,12 +33,17 @@ class PaymentServiceFixtures(TestCase):
     def setUpTestData(cls) -> None:
         user = User.objects.create_user("reader@example.com")
         cls.book = Book.objects.create(
-            title="The Hobbit", author="J. R. R. Tolkien",
-            inventory=3, daily_fee=Decimal("1.50"),
+            title="The Hobbit",
+            author="J. R. R. Tolkien",
+            inventory=3,
+            daily_fee=Decimal("1.50"),
         )
         cls.borrowing = Borrowing.objects.create(
-            book=cls.book, user=user, borrow_date=date(2026, 10, 20),
-            expected_return_date=date(2026, 10, 23), daily_fee=Decimal("1.50"),
+            book=cls.book,
+            user=user,
+            borrow_date=date(2026, 10, 20),
+            expected_return_date=date(2026, 10, 23),
+            daily_fee=Decimal("1.50"),
         )
 
     def setUp(self) -> None:
@@ -61,8 +66,9 @@ class PaymentCalculationTests(PaymentServiceFixtures):
 
     def test_same_day_rental_costs_one_day(self):
         self.borrowing.expected_return_date = self.borrowing.borrow_date
-        self.assertEqual(create_rental_payment(self.borrowing).money_to_pay,
-                         Decimal("1.50"))
+        self.assertEqual(
+            create_rental_payment(self.borrowing).money_to_pay, Decimal("1.50")
+        )
 
     def test_free_rental_is_paid_without_checkout(self):
         self.borrowing.daily_fee = Decimal("0.00")
@@ -94,7 +100,8 @@ class PaymentCalculationTests(PaymentServiceFixtures):
     def test_fine_uses_overdue_days_and_double_saved_rate(self):
         Book.objects.filter(pk=self.book.pk).update(daily_fee=Decimal("9.00"))
         payment = create_return_fine(
-            self.borrowing, self.borrowing.expected_return_date + timedelta(days=2),
+            self.borrowing,
+            self.borrowing.expected_return_date + timedelta(days=2),
         )
         self.assertEqual(payment.money_to_pay, Decimal("6.00"))
         self.assertEqual(payment.type, Payment.Type.FINE)
@@ -142,7 +149,8 @@ class PaymentCalculationTests(PaymentServiceFixtures):
 
 
 @override_settings(
-    STRIPE_SECRET_KEY="sk_test_fake", PAYMENTS_BASE_URL="https://test.local/",
+    STRIPE_SECRET_KEY="sk_test_fake",
+    PAYMENTS_BASE_URL="https://test.local/",
 )
 class CheckoutServiceTests(PaymentServiceFixtures):
     payment: Payment
@@ -162,17 +170,22 @@ class CheckoutServiceTests(PaymentServiceFixtures):
             "metadata": {"payment_id": str(self.payment.pk)},
             "client_reference_id": str(self.payment.checkout_key),
             "amount_total": int(self.payment.money_to_pay * 100),
-            "currency": "usd", "mode": "payment",
-            "status": "open", "payment_status": "unpaid",
+            "currency": "usd",
+            "mode": "payment",
+            "status": "open",
+            "payment_status": "unpaid",
         }
         data.update(overrides)
         return data
 
     def create_session_response(self, *, params, options):
         # Use an actual SDK object: it exposes to_dict(), not dict.get().
-        return stripe.checkout.Session.construct_from(self.session_data(
-            client_reference_id=params["client_reference_id"],
-        ), "sk_test_fake")
+        return stripe.checkout.Session.construct_from(
+            self.session_data(
+                client_reference_id=params["client_reference_id"],
+            ),
+            "sk_test_fake",
+        )
 
     def existing_session(self, **overrides) -> dict:
         self.payment.session_id = "cs_test_existing"
@@ -181,7 +194,8 @@ class CheckoutServiceTests(PaymentServiceFixtures):
         data = self.session_data(**overrides)
         self.sessions.retrieve.side_effect = None
         self.sessions.retrieve.return_value = stripe.checkout.Session.construct_from(
-            data, "sk_test_fake",
+            data,
+            "sk_test_fake",
         )
         return data
 
@@ -194,11 +208,15 @@ class CheckoutServiceTests(PaymentServiceFixtures):
         self.assertEqual(params["client_reference_id"], key)
         self.assertEqual(params["metadata"], {"payment_id": str(self.payment.pk)})
         self.assertEqual(params["mode"], "payment")
-        self.assertEqual(params["success_url"],
-                         "https://test.local" + reverse("payments:success")
-                         + "?session_id={CHECKOUT_SESSION_ID}")
-        self.assertEqual(params["cancel_url"],
-                         "https://test.local" + reverse("payments:cancel"))
+        self.assertEqual(
+            params["success_url"],
+            "https://test.local"
+            + reverse("payments:success")
+            + "?session_id={CHECKOUT_SESSION_ID}",
+        )
+        self.assertEqual(
+            params["cancel_url"], "https://test.local" + reverse("payments:cancel")
+        )
         item = params["line_items"][0]
         self.assertEqual(item["quantity"], 1)
         self.assertEqual(item["price_data"]["currency"], "usd")
@@ -215,8 +233,10 @@ class CheckoutServiceTests(PaymentServiceFixtures):
         self.payment.save(update_fields=["type"])
         checkout(self.payment)
         item = self.sessions.create.call_args.kwargs["params"]["line_items"][0]
-        self.assertEqual(item["price_data"]["product_data"]["name"],
-                         f"Library overdue fine #{self.payment.pk}")
+        self.assertEqual(
+            item["price_data"]["product_data"]["name"],
+            f"Library overdue fine #{self.payment.pk}",
+        )
 
     def test_repeated_checkout_reuses_existing_open_session(self):
         data = self.existing_session()
@@ -265,7 +285,8 @@ class CheckoutServiceTests(PaymentServiceFixtures):
         self.sessions.create.side_effect = self.create_session_response
         checkout(self.payment)
         self.assertEqual(
-            self.sessions.create.call_args.kwargs["options"], first_options,
+            self.sessions.create.call_args.kwargs["options"],
+            first_options,
         )
         self.assertEqual(Payment.objects.count(), 1)
 
@@ -307,15 +328,22 @@ class CheckoutServiceTests(PaymentServiceFixtures):
     def test_confirmation_rejects_mismatched_session_fields(self):
         self.existing_session()
         for changes in (
-            {"id": None}, {"id": "cs_test_other"},
+            {"id": None},
+            {"id": "cs_test_other"},
             {"client_reference_id": str(uuid.uuid4())},
-            {"amount_total": 1}, {"currency": "eur"}, {"mode": "subscription"},
+            {"amount_total": 1},
+            {"currency": "eur"},
+            {"mode": "subscription"},
         ):
             with self.subTest(changes=changes):
                 with self.assertRaises(ValidationError):
-                    confirm_session(self.session_data(
-                        status="complete", payment_status="paid", **changes,
-                    ))
+                    confirm_session(
+                        self.session_data(
+                            status="complete",
+                            payment_status="paid",
+                            **changes,
+                        )
+                    )
                 self.payment.refresh_from_db()
                 self.assertEqual(self.payment.status, Payment.Status.PENDING)
                 self.assertEqual(self.payment.session_id, "cs_test_existing")
@@ -326,7 +354,8 @@ class CheckoutServiceTests(PaymentServiceFixtures):
 
     def test_no_payment_required_only_confirms_zero_amount(self):
         data = self.session_data(
-            status="complete", payment_status="no_payment_required",
+            status="complete",
+            payment_status="no_payment_required",
         )
         self.assertEqual(confirm_session(data).status, Payment.Status.PENDING)
         self.payment.money_to_pay = Decimal("0.00")
