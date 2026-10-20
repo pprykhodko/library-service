@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     "books",
     "borrowings",
     "payments",
+    "notifications",
 ]
 
 MIDDLEWARE = [
@@ -167,6 +168,8 @@ SPECTACULAR_SETTINGS = {
 
 
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 PAYMENTS_BASE_URL = os.getenv("PAYMENTS_BASE_URL", "http://127.0.0.1:8000")
 
