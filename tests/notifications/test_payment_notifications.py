@@ -117,7 +117,6 @@ class SuccessfulPaymentNotificationTests(TestCase):
         self.enqueue.assert_called_once()
 
     def test_repeated_confirmations_enqueue_only_one_notification(self):
-        # Webhook, success redirect and scheduled sync share confirm_session.
         for _ in range(3):
             with self.captureOnCommitCallbacks(execute=True):
                 result = confirm_session(self.session_data())
