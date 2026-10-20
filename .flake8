@@ -11,6 +11,5 @@ exclude =
     *.egg-info,
     .pytest_cache,
     .mypy_cache,
-    */migrations/*,
-    theatre_service/settings.py
+    */migrations/*
 

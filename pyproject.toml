@@ -1,0 +1,19 @@
+[tool.black]
+line-length = 88
+target-version = ["py314"]
+extend-exclude = "/migrations/"
+
+[tool.coverage.run]
+branch = true
+source = ["users", "books", "borrowings", "payments", "library_service"]
+omit = [
+    "*/migrations/*",
+    "*/tests.py",
+    "library_service/asgi.py",
+    "library_service/wsgi.py",
+]
+
+[tool.coverage.report]
+fail_under = 60
+show_missing = true
+precision = 2
