@@ -6,6 +6,7 @@ from rest_framework import serializers
 from books.models import Book
 from books.serializers import BookSerializer
 from borrowings.models import Borrowing
+from notifications.tasks import send_telegram_notification
 from users.serializers import CustomerSerializer
 from payments.serializers import PaymentSerializer
 from payments.models import Payment
@@ -87,6 +88,18 @@ class BorrowingSerializer(serializers.ModelSerializer):
                 borrow_date=today, daily_fee=book.daily_fee, **validated_data
             )
             create_rental_payment(borrowing)
+
+            message = (
+                f"New borrowing\n"
+                f"Borrowing #{borrowing.pk}\n"
+                f"Book: {book.title}\n"
+                f"Reader: {borrowing.user.email}\n"
+                f"Borrow date: {borrowing.borrow_date.isoformat()}\n"
+                f"Expected return date: {borrowing.expected_return_date.isoformat()}"
+            )
+            transaction.on_commit(
+                lambda: send_telegram_notification.delay(message), robust=True
+            )
 
             return borrowing
 

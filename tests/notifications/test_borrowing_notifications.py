@@ -6,6 +6,7 @@ from django.db import transaction
 from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
+from kombu.exceptions import OperationalError
 from rest_framework.test import APIClient, APITestCase
 
 from books.models import Book
@@ -97,6 +98,20 @@ class NewBorrowingNotificationTests(APITestCase):
         self.assertFalse(Payment.objects.exists())
         self.book.refresh_from_db()
         self.assertEqual(self.book.inventory, 3)
+
+    def test_broker_failure_does_not_undo_successful_borrowing(self):
+        self.enqueue.side_effect = OperationalError("Broker unavailable")
+
+        with self.assertLogs(level="ERROR"):
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self.client.post(BORROWINGS_URL, self.payload)
+
+        self.assertEqual(response.status_code, 201)
+        self.enqueue.assert_called_once()
+        borrowing = Borrowing.objects.get(pk=response.data["id"])
+        self.assertTrue(Payment.objects.filter(borrowing=borrowing).exists())
+        self.book.refresh_from_db()
+        self.assertEqual(self.book.inventory, 2)
 
     def test_failed_payment_creation_does_not_enqueue_notification(self):
         Book.objects.filter(pk=self.book.pk).update(daily_fee=Decimal("0.10"))
