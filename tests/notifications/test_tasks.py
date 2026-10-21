@@ -2,16 +2,22 @@ from unittest.mock import patch
 
 from celery.exceptions import Retry
 from django.core.exceptions import ImproperlyConfigured
-from django.test import SimpleTestCase
+from django.test import TestCase
+from django.utils import timezone
+
+from notifications.models import Notification
 
 from notifications.services import TelegramDeliveryError
 from notifications.tasks import send_telegram_notification
 
 
-class TelegramNotificationTaskTests(SimpleTestCase):
+class TelegramNotificationTaskTests(TestCase):
     text = "New borrowing #12: The Hobbit"
 
     def setUp(self) -> None:
+        self.notification = Notification.objects.create(
+            event_key="test", message=self.text
+        )
         delivery = patch("notifications.tasks.send_telegram_message")
         self.send_message = delivery.start()
         self.addCleanup(delivery.stop)
@@ -35,14 +41,17 @@ class TelegramNotificationTaskTests(SimpleTestCase):
     def run_task(self, retries: int = 0):
         send_telegram_notification.push_request(
             id="notification-test",
-            args=(self.text,),
+            args=(self.notification.pk,),
             kwargs={},
             retries=retries,
             called_directly=False,
             is_eager=True,
         )
         try:
-            return send_telegram_notification.run(self.text)
+            self.notification.refresh_from_db()
+            attempt_time = max(timezone.now(), self.notification.next_attempt_at)
+            with patch("notifications.tasks.timezone.now", return_value=attempt_time):
+                return send_telegram_notification.run(self.notification.pk)
         finally:
             send_telegram_notification.pop_request()
 
@@ -61,7 +70,7 @@ class TelegramNotificationTaskTests(SimpleTestCase):
         self.assertIs(raised.exception.exc, error)
         self.assertEqual(raised.exception.when, 60)
         self.assertIsNotNone(raised.exception.sig)
-        self.assertEqual(raised.exception.sig.args, (self.text,))
+        self.assertEqual(raised.exception.sig.args, (self.notification.pk,))
 
     def test_all_three_retries_are_available(self):
         self.assertEqual(send_telegram_notification.max_retries, 3)

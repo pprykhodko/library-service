@@ -4,9 +4,11 @@ from unittest.mock import patch
 
 from django.test import TestCase, override_settings
 from django.utils import timezone
+from kombu.exceptions import OperationalError
 
 from books.models import Book
 from borrowings.models import Borrowing
+from notifications.models import Notification
 from notifications.tasks import notify_overdue_borrowings, send_telegram_notification
 from payments.models import Payment
 from users.models import User
@@ -52,6 +54,10 @@ class OverdueBorrowingNotificationTests(TestCase):
         network_guard.start()
         self.addCleanup(network_guard.stop)
 
+    def run_check(self) -> int:
+        with self.captureOnCommitCallbacks(execute=True):
+            return notify_overdue_borrowings.run()
+
     def make_borrowing(
         self,
         *,
@@ -69,8 +75,31 @@ class OverdueBorrowingNotificationTests(TestCase):
         )
 
     def test_empty_database_requires_no_notifications(self):
-        self.assertEqual(notify_overdue_borrowings.run(), 0)
+        self.assertEqual(self.run_check(), 0)
         self.enqueue.assert_not_called()
+
+    def test_same_day_rerun_does_not_duplicate_pending_reminders(self):
+        self.make_borrowing()
+        self.run_check()
+        self.run_check()
+        self.assertEqual(Notification.objects.count(), 1)
+        self.enqueue.assert_called_once()
+
+    def test_next_day_creates_new_reminder(self):
+        self.make_borrowing()
+        self.run_check()
+        self.now.return_value += timedelta(days=1)
+        self.run_check()
+        self.assertEqual(Notification.objects.count(), 2)
+        self.assertEqual(self.enqueue.call_count, 2)
+
+    def test_broker_outage_preserves_all_overdue_reminders(self):
+        self.make_borrowing()
+        self.make_borrowing(user=self.other_user)
+        self.enqueue.side_effect = OperationalError("Offline")
+        with self.assertLogs(level="ERROR"):
+            self.assertEqual(self.run_check(), 2)
+        self.assertEqual(Notification.objects.filter(sent_at__isnull=True).count(), 2)
 
     def test_only_unreturned_borrowings_due_before_today_are_selected(self):
         overdue = self.make_borrowing()
@@ -78,10 +107,10 @@ class OverdueBorrowingNotificationTests(TestCase):
         self.make_borrowing(due_date=self.today)
         self.make_borrowing(due_date=self.today + timedelta(days=1))
 
-        self.assertEqual(notify_overdue_borrowings.run(), 1)
+        self.assertEqual(self.run_check(), 1)
 
         self.enqueue.assert_called_once()
-        text = self.enqueue.call_args.args[0]
+        text = Notification.objects.get(pk=self.enqueue.call_args.args[0]).message
         self.assertIsInstance(text, str)
         for detail in (
             f"Borrowing #{overdue.pk}",
@@ -99,10 +128,13 @@ class OverdueBorrowingNotificationTests(TestCase):
             self.make_borrowing(due_date=self.today - timedelta(days=1)),
         ]
 
-        self.assertEqual(notify_overdue_borrowings.run(), 2)
+        self.assertEqual(self.run_check(), 2)
 
         self.assertEqual(self.enqueue.call_count, 2)
-        texts = [call.args[0] for call in self.enqueue.call_args_list]
+        texts = [
+            Notification.objects.get(pk=call.args[0]).message
+            for call in self.enqueue.call_args_list
+        ]
         for borrowing in borrowings:
             with self.subTest(borrowing_id=borrowing.pk):
                 matching = [
@@ -117,9 +149,12 @@ class OverdueBorrowingNotificationTests(TestCase):
             self.make_borrowing(user=self.other_user),
         ]
 
-        self.assertEqual(notify_overdue_borrowings.run(), 2)
+        self.assertEqual(self.run_check(), 2)
 
-        texts = [call.args[0] for call in self.enqueue.call_args_list]
+        texts = [
+            Notification.objects.get(pk=call.args[0]).message
+            for call in self.enqueue.call_args_list
+        ]
         self.assertEqual(len(texts), 2)
         for borrowing in borrowings:
             with self.subTest(borrowing_id=borrowing.pk):
@@ -139,7 +174,7 @@ class OverdueBorrowingNotificationTests(TestCase):
                 status=status,
             )
 
-        self.assertEqual(notify_overdue_borrowings.run(), 3)
+        self.assertEqual(self.run_check(), 3)
         self.assertEqual(self.enqueue.call_count, 3)
 
     def test_check_does_not_change_inventory_borrowings_or_create_fines(self):
@@ -153,7 +188,7 @@ class OverdueBorrowingNotificationTests(TestCase):
         borrowings_before = list(Borrowing.objects.order_by("pk").values())
         payments_before = list(Payment.objects.order_by("pk").values())
 
-        self.assertEqual(notify_overdue_borrowings.run(), 1)
+        self.assertEqual(self.run_check(), 1)
 
         self.assertEqual(list(Book.objects.order_by("pk").values()), books_before)
         self.assertEqual(
@@ -167,19 +202,19 @@ class OverdueBorrowingNotificationTests(TestCase):
         self.make_borrowing(due_date=date(2026, 10, 21))
 
         with timezone.override("Europe/Vienna"):
-            self.assertEqual(notify_overdue_borrowings.run(), 1)
+            self.assertEqual(self.run_check(), 1)
 
         self.enqueue.assert_called_once()
-        text = self.enqueue.call_args.args[0]
+        text = Notification.objects.get(pk=self.enqueue.call_args.args[0]).message
         self.assertIn(f"Borrowing #{overdue.pk}", text)
         self.assertIn("Overdue days: 1", text)
 
     def test_returned_book_is_excluded_from_next_check(self):
         borrowing = self.make_borrowing()
-        self.assertEqual(notify_overdue_borrowings.run(), 1)
+        self.assertEqual(self.run_check(), 1)
         self.enqueue.assert_called_once()
         self.enqueue.reset_mock()
         Borrowing.objects.filter(pk=borrowing.pk).update(actual_return_date=self.today)
 
-        self.assertEqual(notify_overdue_borrowings.run(), 0)
+        self.assertEqual(self.run_check(), 0)
         self.enqueue.assert_not_called()

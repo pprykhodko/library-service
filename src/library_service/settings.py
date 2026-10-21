@@ -179,6 +179,11 @@ CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_IGNORE_RESULT = True
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 CELERY_BEAT_SCHEDULE = {
+    "retry-pending-notifications-every-minute": {
+        "task": "notifications.tasks.retry_pending_notifications",
+        "schedule": timedelta(minutes=1),
+        "options": {"expires": 60},
+    },
     "notify-overdue-borrowings-daily": {
         "task": "notifications.tasks.notify_overdue_borrowings",
         "schedule": crontab(hour=9, minute=0),

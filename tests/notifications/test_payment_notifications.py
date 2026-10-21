@@ -3,7 +3,7 @@ from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
-from django.db import transaction
+from django.db import DatabaseError, transaction
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from kombu.exceptions import OperationalError
@@ -11,6 +11,7 @@ from rest_framework.exceptions import ValidationError
 
 from books.models import Book
 from borrowings.models import Borrowing
+from notifications.models import Notification
 from notifications.tasks import send_telegram_notification
 from payments.models import ExpiredCheckoutSession, Payment
 from payments.services import confirm_session
@@ -77,7 +78,7 @@ class SuccessfulPaymentNotificationTests(TestCase):
 
     def assert_payment_message(self, payment_type: str) -> None:
         self.enqueue.assert_called_once()
-        text = self.enqueue.call_args.args[0]
+        text = Notification.objects.get(pk=self.enqueue.call_args.args[0]).message
         self.assertIsInstance(text, str)
         for detail in (
             f"Payment #{self.payment.pk}",
@@ -118,6 +119,25 @@ class SuccessfulPaymentNotificationTests(TestCase):
         self.payment.refresh_from_db()
         self.assertEqual(self.payment.status, Payment.Status.PAID)
         self.enqueue.assert_called_once()
+        notification = Notification.objects.get(
+            event_key=f"payment:{self.payment.pk}:paid"
+        )
+        self.assertIsNone(notification.sent_at)
+        self.assertIn("4.50 USD", notification.message)
+
+    def test_outbox_write_failure_rolls_back_paid_status(self):
+        with patch(
+            "notifications.outbox.Notification.objects.get_or_create",
+            side_effect=DatabaseError("Cannot save notification"),
+        ):
+            with self.captureOnCommitCallbacks(execute=True):
+                with self.assertRaises(DatabaseError):
+                    confirm_session(self.session_data())
+
+        self.enqueue.assert_not_called()
+        self.payment.refresh_from_db()
+        self.assertEqual(self.payment.status, Payment.Status.PENDING)
+        self.assertFalse(Notification.objects.exists())
 
     def test_notification_waits_for_transaction_commit(self):
         with self.captureOnCommitCallbacks(execute=True):
@@ -136,6 +156,7 @@ class SuccessfulPaymentNotificationTests(TestCase):
             self.assertEqual(result.status, Payment.Status.PAID)
 
         self.enqueue.assert_called_once()
+        self.assertEqual(Notification.objects.count(), 1)
 
     def test_repeated_confirmations_inside_one_transaction_enqueue_once(self):
         with self.captureOnCommitCallbacks(execute=True):
@@ -153,6 +174,7 @@ class SuccessfulPaymentNotificationTests(TestCase):
                 transaction.set_rollback(True)
 
         self.enqueue.assert_not_called()
+        self.assertFalse(Notification.objects.exists())
         self.payment.refresh_from_db()
         self.assertEqual(self.payment.status, Payment.Status.PENDING)
 

@@ -2,7 +2,7 @@ from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
-from django.db import transaction
+from django.db import DatabaseError, transaction
 from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -11,6 +11,7 @@ from rest_framework.test import APIClient, APITestCase
 
 from books.models import Book
 from borrowings.models import Borrowing
+from notifications.models import Notification
 from notifications.tasks import send_telegram_notification
 from payments.models import Payment
 from users.models import User
@@ -61,7 +62,7 @@ class NewBorrowingNotificationTests(APITestCase):
         borrowing = Borrowing.objects.get(pk=response.data["id"])
         self.assertTrue(Payment.objects.filter(borrowing=borrowing).exists())
         self.enqueue.assert_called_once()
-        text = self.enqueue.call_args.args[0]
+        text = Notification.objects.get(pk=self.enqueue.call_args.args[0]).message
         self.assertIsInstance(text, str)
         for detail in (
             f"Borrowing #{borrowing.pk}",
@@ -96,6 +97,7 @@ class NewBorrowingNotificationTests(APITestCase):
         self.enqueue.assert_not_called()
         self.assertFalse(Borrowing.objects.exists())
         self.assertFalse(Payment.objects.exists())
+        self.assertFalse(Notification.objects.exists())
         self.book.refresh_from_db()
         self.assertEqual(self.book.inventory, 3)
 
@@ -112,6 +114,27 @@ class NewBorrowingNotificationTests(APITestCase):
         self.assertTrue(Payment.objects.filter(borrowing=borrowing).exists())
         self.book.refresh_from_db()
         self.assertEqual(self.book.inventory, 2)
+        notification = Notification.objects.get(
+            event_key=f"borrowing:{borrowing.pk}:created"
+        )
+        self.assertIsNone(notification.sent_at)
+        self.assertIn(self.book.title, notification.message)
+
+    def test_outbox_write_failure_rolls_back_borrowing_payment_and_stock(self):
+        with patch(
+            "notifications.outbox.Notification.objects.get_or_create",
+            side_effect=DatabaseError("Cannot save notification"),
+        ):
+            with self.captureOnCommitCallbacks(execute=True):
+                with self.assertRaises(DatabaseError):
+                    self.client.post(BORROWINGS_URL, self.payload)
+
+        self.enqueue.assert_not_called()
+        self.assertFalse(Notification.objects.exists())
+        self.assertFalse(Borrowing.objects.exists())
+        self.assertFalse(Payment.objects.exists())
+        self.book.refresh_from_db()
+        self.assertEqual(self.book.inventory, 3)
 
     def test_failed_payment_creation_does_not_enqueue_notification(self):
         Book.objects.filter(pk=self.book.pk).update(daily_fee=Decimal("0.10"))
