@@ -6,6 +6,7 @@ from unittest.mock import patch
 from django.db import transaction
 from django.test import TestCase, override_settings
 from django.utils import timezone
+from kombu.exceptions import OperationalError
 from rest_framework.exceptions import ValidationError
 
 from books.models import Book
@@ -105,6 +106,18 @@ class SuccessfulPaymentNotificationTests(TestCase):
 
         self.assertEqual(result.status, Payment.Status.PAID)
         self.assert_payment_message(Payment.Type.FINE)
+
+    def test_broker_failure_does_not_undo_confirmed_payment(self):
+        self.enqueue.side_effect = OperationalError("Broker unavailable")
+
+        with self.assertLogs(level="ERROR"):
+            with self.captureOnCommitCallbacks(execute=True):
+                result = confirm_session(self.session_data())
+
+        self.assertEqual(result.status, Payment.Status.PAID)
+        self.payment.refresh_from_db()
+        self.assertEqual(self.payment.status, Payment.Status.PAID)
+        self.enqueue.assert_called_once()
 
     def test_notification_waits_for_transaction_commit(self):
         with self.captureOnCommitCallbacks(execute=True):
