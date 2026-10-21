@@ -28,6 +28,9 @@ its scope.
 ```text
 library-service/
 ├── .github/workflows/ci.yml
+├── Dockerfile
+├── docker-compose.yml
+├── .dockerignore
 ├── src/
 │   ├── library_service/     # Django settings, root URLs, Celery configuration
 │   ├── users/               # Accounts, roles, profiles, authentication
@@ -47,7 +50,81 @@ library-service/
 └── requirements.txt
 ```
 
-## Local installation
+## Run with Docker Compose
+
+Install Docker with Compose 2.30 or newer (Docker Desktop includes Compose).
+Use Linux containers. Clone the repository and copy `.env.example` to `.env` as
+shown in the local installation section, then fill in the Stripe and Telegram
+settings described below. Python and Redis do not need to be installed on the
+host for this option.
+
+From the repository root:
+
+```shell
+docker compose up --build -d
+docker compose ps -a
+docker compose exec app python manage.py createsuperuser
+```
+
+Open <http://127.0.0.1:8000/api/docs/>. Stop a locally running Django server first
+if it already uses port 8000.
+
+| Service | Purpose |
+| --- | --- |
+| `migrate` | Apply migrations once before the application processes start; exit code 0 is expected |
+| `app` | Django development server on localhost port 8000 |
+| `worker` | Execute Celery tasks with one worker process |
+| `beat` | Schedule periodic tasks |
+| `redis` | Internal message broker with append-only persistence |
+
+Django services share one Python image and run as a non-root user. Compose waits
+for successful migrations and a healthy Redis before starting the application,
+worker, and scheduler. This uses Compose's
+[startup dependencies](https://docs.docker.com/compose/how-tos/startup-order/).
+The setup is intended for local development and uses Django's `runserver`.
+
+Compose reads integration settings from `.env` and overrides two settings:
+`CELERY_BROKER_URL=redis://redis:6379/0` and
+`SQLITE_PATH=/data/db.sqlite3`. Keep `PAYMENTS_BASE_URL` set to
+`http://127.0.0.1:8000`: the Checkout return URL is opened by your browser.
+Write `.env` values without surrounding quotes; Compose uses the
+[`raw` env-file format](https://docs.docker.com/reference/compose-file/services/#format)
+to preserve characters such as `$` in credentials.
+
+SQLite is shared by Django and Celery through the `sqlite_data` named volume.
+The first start creates an empty database; it does not import the host's
+`db.sqlite3`. Redis data and the Beat schedule use separate named volumes.
+Source files, local credentials, and the host database are not mounted into
+running containers; credentials are passed as environment variables, and the
+source code is copied into the image. `.dockerignore` excludes local secrets,
+databases, virtual environments, and Git history from the build context.
+
+Useful commands:
+
+```shell
+docker compose logs -f app worker beat
+docker compose exec app python manage.py shell
+docker compose exec app python manage.py check
+docker compose exec app python manage.py test tests --noinput
+docker compose exec app python manage.py sync_payments
+docker compose down
+```
+
+`docker compose down` preserves the named volumes. Adding `--volumes` deletes
+the Docker database, Redis data, and scheduler state.
+
+After code or dependency changes, rebuild with `docker compose up --build -d`.
+After editing `.env`, recreate services with `docker compose up -d --force-recreate`;
+a simple restart does not reload their environment. When changing database
+migrations, use `docker compose down` followed by `docker compose up --build -d`
+so existing workers stop before the migration step runs.
+
+Run the Stripe CLI on the host using the same forwarding command shown below.
+Compose already runs Redis, a worker, and Beat, so skip the manual Redis/Celery
+startup section when using this option. Do not run another Beat scheduler for
+the same environment.
+
+## Local installation without Docker
 
 Install Python 3.14 and Git. For the complete workflow, you also need Redis,
 a Stripe test account and the Stripe CLI, and a Telegram bot.
@@ -130,8 +207,8 @@ Useful local URLs:
 
 ## Redis and Celery
 
-Use an existing Redis instance or start one with Docker. The repository does not
-contain a Docker Compose setup; this container runs Redis only.
+For installation without Compose, use an existing Redis instance or start one
+with Docker. This standalone container runs Redis only.
 
 ```shell
 docker run -d --name library-redis -p 127.0.0.1:6379:6379 redis:7-alpine

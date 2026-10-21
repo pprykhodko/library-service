@@ -1,0 +1,72 @@
+x-django: &django
+  build: .
+  image: library-service:local
+  init: true
+  env_file:
+    - path: .env
+      format: raw
+  environment:
+    CELERY_BROKER_URL: redis://redis:6379/0
+    SQLITE_PATH: /data/db.sqlite3
+  volumes:
+    - sqlite_data:/data
+
+x-ready: &ready
+  migrate:
+    condition: service_completed_successfully
+  redis:
+    condition: service_healthy
+
+services:
+  migrate:
+    <<: *django
+    command: ["python", "manage.py", "migrate", "--noinput"]
+
+  app:
+    <<: *django
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on: *ready
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/', timeout=5).close()"
+      interval: 10s
+      timeout: 6s
+      retries: 5
+      start_period: 10s
+
+  worker:
+    <<: *django
+    restart: unless-stopped
+    command: ["python", "-m", "celery", "-A", "library_service", "worker", "--loglevel=info", "--concurrency=1"]
+    depends_on: *ready
+
+  beat:
+    <<: *django
+    restart: unless-stopped
+    command: ["python", "-m", "celery", "-A", "library_service", "beat", "--loglevel=info", "--schedule=/beat/celerybeat-schedule", "--pidfile="]
+    volumes:
+      - sqlite_data:/data
+      - beat_data:/beat
+    depends_on: *ready
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  sqlite_data:
+  redis_data:
+  beat_data:
