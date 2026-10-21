@@ -19,6 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
+      LIBRARY_SECRET_KEY: "ci-only-key-12345"
+      LIBRARY_DEBUG: "False"
       STRIPE_SECRET_KEY: ""
       STRIPE_WEBHOOK_SECRET: ""
 
