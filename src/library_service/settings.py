@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 
 import os
 
+from celery.schedules import crontab
 from dotenv import load_dotenv
 from pathlib import Path
 from datetime import timedelta
@@ -178,6 +179,11 @@ CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_IGNORE_RESULT = True
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 CELERY_BEAT_SCHEDULE = {
+    "notify-overdue-borrowings-daily": {
+        "task": "notifications.tasks.notify_overdue_borrowings",
+        "schedule": crontab(hour=9, minute=0),
+        "options": {"expires": 3600},
+    },
     "sync-payment-sessions-every-minute": {
         "task": "payments.tasks.sync_payment_sessions",
         "schedule": timedelta(minutes=1),
