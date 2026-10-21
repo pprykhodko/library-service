@@ -56,6 +56,7 @@ class BorrowingSerializerTests(TestCase):
     def test_validation_converts_book_id_and_date_without_writing_to_database(self):
         serializer = self.valid_serializer()
         self.assertEqual(serializer.validated_data["book"], self.book)
+        self.assertEqual(serializer.validated_data["borrow_date"], self.today)
         self.assertEqual(
             serializer.validated_data["expected_return_date"],
             self.today + timedelta(days=3),
@@ -144,8 +145,10 @@ class BorrowingSerializerTests(TestCase):
         )
         serializer = self.valid_serializer()
         self.assertSetEqual(
-            set(serializer.validated_data), {"book", "expected_return_date"}
+            set(serializer.validated_data),
+            {"book", "borrow_date", "expected_return_date"},
         )
+        self.assertEqual(serializer.validated_data["borrow_date"], self.today)
         borrowing = serializer.save(user=self.user)
 
         self.assertNotEqual(borrowing.pk, 999999)
@@ -180,17 +183,22 @@ class BorrowingSerializerTests(TestCase):
                 self.assertFalse(Borrowing.objects.exists())
                 self.assertFalse(Payment.objects.exists())
 
-    def test_save_rechecks_date_if_day_changes_after_validation(self):
+    def test_save_preserves_validated_borrow_date_when_day_changes(self):
         self.payload["expected_return_date"] = self.today.isoformat()
         serializer = self.valid_serializer()
         with patch(
             "borrowings.serializers.timezone.localdate",
             return_value=self.today + timedelta(days=1),
         ):
-            with self.assertRaises(ValidationError) as error:
-                serializer.save(user=self.user)
-        self.assertIn("expected_return_date", error.exception.detail)
-        self.assert_no_creation()
+            borrowing = serializer.save(user=self.user)
+
+        borrowing.refresh_from_db()
+        self.book.refresh_from_db()
+        self.assertEqual(borrowing.borrow_date, self.today)
+        self.assertEqual(borrowing.expected_return_date, self.today)
+        self.assertEqual(self.book.inventory, 2)
+        self.assertEqual(Borrowing.objects.count(), 1)
+        self.assertEqual(borrowing.payments.get().money_to_pay, Decimal("1.50"))
 
     def test_pending_and_expired_rentals_and_fines_block_creation(self):
         existing = Borrowing.objects.create(

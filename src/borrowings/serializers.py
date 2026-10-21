@@ -37,12 +37,6 @@ class BorrowingSerializer(serializers.ModelSerializer):
             "payments",
         )
 
-    def validate_expected_return_date(self, value):
-        if value < timezone.localdate():
-            raise serializers.ValidationError("Return date cannot be in the past")
-
-        return value
-
     def validate_book(self, book):
         if not book.is_active:
             raise serializers.ValidationError("This book is not available for lending")
@@ -52,14 +46,18 @@ class BorrowingSerializer(serializers.ModelSerializer):
 
         return book
 
-    def create(self, validated_data):
-        today = timezone.localdate()
+    def validate(self, attrs):
+        borrow_date = timezone.localdate()
 
-        if validated_data["expected_return_date"] < today:
+        if attrs["expected_return_date"] < borrow_date:
             raise serializers.ValidationError(
                 {"expected_return_date": "Return date cannot be in the past"}
             )
 
+        attrs["borrow_date"] = borrow_date
+        return attrs
+
+    def create(self, validated_data):
         with transaction.atomic():
             lock_borrower(validated_data["user"].pk)
 
@@ -85,7 +83,7 @@ class BorrowingSerializer(serializers.ModelSerializer):
 
             book = Book.objects.get(pk=validated_data["book"].pk)
             borrowing = Borrowing.objects.create(
-                borrow_date=today, daily_fee=book.daily_fee, **validated_data
+                daily_fee=book.daily_fee, **validated_data
             )
             create_rental_payment(borrowing)
 
