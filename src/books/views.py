@@ -69,9 +69,6 @@ class BookViewSet(ProtectBookDeletionMixin, viewsets.ModelViewSet):
         if getattr(self, "swagger_fake_view", False):
             return queryset.none()
 
-        if not self.request.user.is_authenticated:
-            return queryset.none()
-
         if get_role(self.request.user) not in (EMPLOYEE, ADMIN):
             queryset = queryset.filter(is_active=True)
 
