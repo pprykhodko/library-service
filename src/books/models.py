@@ -18,7 +18,7 @@ class Book(models.Model):
         validators=[RegexValidator(r"\S", _("Author must not be empty"))],
     )
     cover = models.CharField(max_length=4, choices=Cover, default=Cover.HARD)
-    inventory = models.PositiveIntegerField(validators=[MinValueValidator(0)])
+    inventory = models.PositiveIntegerField()
     daily_fee = models.DecimalField(
         max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal("0.00"))]
     )
