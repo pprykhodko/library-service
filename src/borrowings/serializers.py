@@ -6,7 +6,7 @@ from rest_framework import serializers
 from books.models import Book
 from books.serializers import BookSerializer
 from borrowings.models import Borrowing
-from notifications.tasks import send_telegram_notification
+from notifications.outbox import queue_notification
 from users.serializers import CustomerSerializer
 from payments.serializers import PaymentSerializer
 from payments.models import Payment
@@ -97,9 +97,7 @@ class BorrowingSerializer(serializers.ModelSerializer):
                 f"Borrow date: {borrowing.borrow_date.isoformat()}\n"
                 f"Expected return date: {borrowing.expected_return_date.isoformat()}"
             )
-            transaction.on_commit(
-                lambda: send_telegram_notification.delay(message), robust=True
-            )
+            queue_notification(f"borrowing:{borrowing.pk}:created", message)
 
             return borrowing
 

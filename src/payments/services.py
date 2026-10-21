@@ -9,7 +9,7 @@ from django.db.models import F
 from django.urls import reverse
 from rest_framework.exceptions import APIException, ValidationError
 
-from notifications.tasks import send_telegram_notification
+from notifications.outbox import queue_notification
 from payments.models import ExpiredCheckoutSession, Payment
 
 
@@ -147,9 +147,7 @@ def confirm_session(session):
                     f"Book: {borrowing.book.title}\n"
                     f"Reader: {borrowing.user.email}"
                 )
-                transaction.on_commit(
-                    lambda: send_telegram_notification.delay(message), robust=True
-                )
+                queue_notification(f"payment:{payment.pk}:paid", message)
 
         elif session.get("status") == "expired" and not historical:
             Payment.objects.filter(pk=payment.pk, status=Payment.Status.PENDING).update(
